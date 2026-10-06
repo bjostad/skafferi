@@ -41,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import Navbar from './components/Navbar.vue';
 import BarcodeScannerModal from './components/BarcodeScannerModal.vue';
@@ -49,9 +49,14 @@ import ReceiptImportModal from './components/ReceiptImportModal.vue';
 import AddItemModal from './components/AddItemModal.vue';
 import ToastBanner from './components/ToastBanner.vue';
 import { useToast } from './composables/useToast';
+import { appInfo } from './services/appInfo';
 
 const { showToast } = useToast();
 const router = useRouter();
+
+onMounted(() => {
+  appInfo.loadVersion();
+});
 
 const scanModalOpen = ref(false);
 const receiptModalOpen = ref(false);

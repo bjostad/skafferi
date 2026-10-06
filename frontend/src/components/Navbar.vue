@@ -309,7 +309,7 @@
             <!-- Settings Menu Footer -->
             <div class="px-3.5 py-2.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
               <span class="font-medium text-slate-400">Skafferi</span>
-              <span class="font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px]">v1.0</span>
+              <span v-if="appVersionDisplay" class="font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px]">{{ appVersionDisplay }}</span>
             </div>
 
           </div>
@@ -351,6 +351,7 @@ import {
 } from 'lucide-vue-next';
 import { auth } from '../services/auth';
 import api from '../services/api';
+import { appInfo } from '../services/appInfo';
 
 defineEmits(['open-scan', 'open-receipt', 'open-add']);
 
@@ -366,6 +367,7 @@ const notifSummary = ref(null);
 const currentUser = computed(() => auth.getCurrentUser());
 const allUsers = computed(() => auth.state.allUsers);
 const providers = computed(() => auth.state.providers || {});
+const appVersionDisplay = computed(() => appInfo.getVersionDisplay());
 
 async function loadNotifications() {
   try {

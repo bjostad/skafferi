@@ -119,4 +119,7 @@ export default {
   saveSettings(settings) {
     return api.post('/settings', settings);
   },
+  getVersion() {
+    return api.get('/settings/version');
+  },
 };

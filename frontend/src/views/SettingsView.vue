@@ -713,7 +713,7 @@
         <span>Self-hosted Pantry &amp; Inventory Management</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <span class="font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 text-[11px]">v0.5-beta</span>
+        <span v-if="appVersionDisplay" class="font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 text-[11px]">{{ appVersionDisplay }}</span>
       </div>
     </div>
 
@@ -968,8 +968,10 @@ import {
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
+import { appInfo } from '../services/appInfo';
 
 const { showToast } = useToast();
+const appVersionDisplay = computed(() => appInfo.getVersionDisplay());
 
 const route = useRoute();
 const bringHelpModalOpen = ref(false);

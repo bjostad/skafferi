@@ -31,5 +31,8 @@ public record SettingsDto(
         Integer freshFoodReminderDays,
         Boolean freshFoodReminderEnabled,
         Integer expirationReminderDays,
-        Boolean expirationReminderEnabled
+        Boolean expirationReminderEnabled,
+
+        // Application Metadata
+        String appVersion
 ) {}

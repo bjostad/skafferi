@@ -68,8 +68,22 @@ public class SettingsService {
     @Value("${skafferi.auth.google.client-secret:}")
     private String defaultGoogleClientSecret;
 
-    public SettingsService(BringSyncService bringSyncService) {
+    @Value("${skafferi.version:0.5.0-beta}")
+    private String configuredVersion;
+
+    private final org.springframework.boot.info.BuildProperties buildProperties;
+
+    public SettingsService(BringSyncService bringSyncService,
+                           @org.springframework.beans.factory.annotation.Autowired(required = false) org.springframework.boot.info.BuildProperties buildProperties) {
         this.bringSyncService = bringSyncService;
+        this.buildProperties = buildProperties;
+    }
+
+    public String getAppVersion() {
+        if (buildProperties != null && buildProperties.getVersion() != null && !buildProperties.getVersion().isBlank()) {
+            return buildProperties.getVersion();
+        }
+        return configuredVersion != null && !configuredVersion.isBlank() ? configuredVersion : "0.5.0-beta";
     }
 
     @PostConstruct
@@ -127,7 +141,8 @@ public class SettingsService {
                 5,
                 true,
                 3,
-                true
+                true,
+                getAppVersion()
         );
     }
 
@@ -153,7 +168,8 @@ public class SettingsService {
                 raw.freshFoodReminderDays() != null ? raw.freshFoodReminderDays() : 5,
                 raw.freshFoodReminderEnabled() != null ? raw.freshFoodReminderEnabled() : true,
                 raw.expirationReminderDays() != null ? raw.expirationReminderDays() : 3,
-                raw.expirationReminderEnabled() != null ? raw.expirationReminderEnabled() : true
+                raw.expirationReminderEnabled() != null ? raw.expirationReminderEnabled() : true,
+                getAppVersion()
         );
     }
 
@@ -194,7 +210,8 @@ public class SettingsService {
                 freshDays,
                 freshEnabled,
                 expDays,
-                expEnabled
+                expEnabled,
+                getAppVersion()
         );
 
         try {

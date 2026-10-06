@@ -24,4 +24,9 @@ public class SettingsController {
     public ResponseEntity<SettingsDto> saveSettings(@RequestBody SettingsDto dto) {
         return ResponseEntity.ok(settingsService.saveSettings(dto));
     }
+
+    @GetMapping("/version")
+    public ResponseEntity<java.util.Map<String, String>> getVersion() {
+        return ResponseEntity.ok(java.util.Map.of("version", settingsService.getAppVersion()));
+    }
 }

@@ -24,7 +24,12 @@ COPY backend/src ./src
 # Copy compiled frontend assets into Spring Boot's static resources
 COPY --from=frontend-builder /app/frontend/dist ./src/main/resources/static/
 
-RUN mvn clean package -DskipTests -B
+ARG APP_VERSION=""
+RUN if [ -n "$APP_VERSION" ]; then \
+      mvn clean package -DskipTests -B -Dskafferi.version="$APP_VERSION"; \
+    else \
+      mvn clean package -DskipTests -B; \
+    fi
 
 # ==========================================
 # Stage 3: Lightweight Production JRE Runtime
