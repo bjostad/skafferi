@@ -26,3 +26,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(150, 133, 171, 0.6);
 }
+
+/* Prevent video element layout shifting & flickering in barcode reader */
+#barcode-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 0.75rem;
+}
+
+#barcode-reader #qr-shaded-region {
+  transition: none !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
