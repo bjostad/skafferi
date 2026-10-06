@@ -36,6 +36,15 @@
                 <span>Scan Another</span>
               </button>
             </div>
+
+            <!-- Camera Error / Insecure Context Banner -->
+            <div v-if="cameraError" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-4 text-center z-10 space-y-2">
+              <div class="w-10 h-10 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                <AlertCircle class="w-6 h-6" />
+              </div>
+              <p class="text-xs font-bold text-rose-300">Camera Unavailable</p>
+              <p class="text-[11px] text-slate-300 max-w-xs leading-normal">{{ cameraError }}</p>
+            </div>
           </div>
           <p class="text-xs text-slate-400 mt-2 text-center">Point your camera at a grocery barcode (UPC / EAN)</p>
         </div>
@@ -158,7 +167,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Html5Qrcode } from 'html5-qrcode';
-import { ScanBarcode, X, Package, Plus, Check, RefreshCw, Loader2 } from 'lucide-vue-next';
+import { ScanBarcode, X, Package, Plus, Check, RefreshCw, Loader2, AlertCircle } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
 
@@ -172,6 +181,7 @@ const lookupResult = ref(null);
 const isScanning = ref(false);
 const isLocked = ref(false);
 const isLookingUp = ref(false);
+const cameraError = ref('');
 const lastScannedCode = ref('');
 const addQuantity = ref(1);
 
@@ -184,6 +194,14 @@ onBeforeUnmount(() => {
 });
 
 async function initScanner() {
+  cameraError.value = '';
+
+  // Check if browser has mediaDevices support (requires secure context HTTPS or localhost)
+  if (!navigator?.mediaDevices?.getUserMedia) {
+    cameraError.value = 'Camera access requires a secure connection (HTTPS). Open https://' + window.location.host + ' in your phone browser.';
+    return;
+  }
+
   try {
     if (!html5QrCode) {
       html5QrCode = new Html5Qrcode('barcode-reader');
@@ -209,6 +227,14 @@ async function initScanner() {
     isScanning.value = true;
   } catch (err) {
     console.warn('Camera barcode scanner error:', err);
+    const errStr = String(err?.message || err);
+    if (errStr.includes('NotAllowedError') || errStr.includes('Permission')) {
+      cameraError.value = 'Camera permission was denied. Please allow camera permissions in your browser address bar.';
+    } else if (errStr.includes('NotFoundError') || errStr.includes('DevicesNotFoundError')) {
+      cameraError.value = 'No camera found on this device.';
+    } else {
+      cameraError.value = errStr || 'Unable to open camera.';
+    }
   }
 }
 
