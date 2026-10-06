@@ -1,0 +1,41 @@
+server:
+  port: ${PORT:8080}
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+
+spring:
+  application:
+    name: skafferi
+  datasource:
+    url: jdbc:sqlite:${DATABASE_PATH:./data/skafferi.db}
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+skafferi:
+  data-dir: ${DATA_DIR:./data}
+  integrations:
+    bring:
+      email: ${BRING_EMAIL:}
+      password: ${BRING_PASSWORD:}
+      auto-sync: ${BRING_AUTO_SYNC:false}
+    mealie:
+      base-url: ${MEALIE_BASE_URL:}
+      api-token: ${MEALIE_API_TOKEN:}
+    kroger:
+      client-id: ${KROGER_CLIENT_ID:}
+      client-secret: ${KROGER_CLIENT_SECRET:}
+      location-id: ${KROGER_LOCATION_ID:}
+
+logging:
+  level:
+    root: INFO
+    com.skafferi: DEBUG
+    org.hibernate.SQL: INFO

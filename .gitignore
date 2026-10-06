@@ -1,0 +1,48 @@
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Java / Maven / Backend
+backend/target/
+backend/*.jar
+backend/.mvn/timing.properties
+backend/.flattened-pom.xml
+
+# Spring static build artifacts (generated from frontend build)
+backend/src/main/resources/static/assets/
+backend/src/main/resources/static/index.html
+backend/src/main/resources/static/favicon.svg
+
+# Database & SQLite files
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Sensitive Settings & local env
+settings.json
+.env
+.env.local

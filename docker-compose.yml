@@ -1,0 +1,30 @@
+services:
+  skafferi:
+    image: skafferi:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skafferi
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    volumes:
+      - skafferi_data:/data
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+      - DATABASE_PATH=/data/skafferi.db
+      # Optional: Pre-configure Bring! credentials
+      # - BRING_EMAIL=user@example.com
+      # - BRING_PASSWORD=secret
+      # - BRING_AUTO_SYNC=true
+      # Optional: Mealie URL & Token
+      # - MEALIE_BASE_URL=http://mealie:9000
+      # - MEALIE_API_TOKEN=your_token
+      # Optional: Kroger Developer API
+      # - KROGER_CLIENT_ID=your_id
+      # - KROGER_CLIENT_SECRET=your_secret
+
+volumes:
+  skafferi_data:
+    driver: local
