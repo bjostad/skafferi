@@ -88,3 +88,10 @@ npm install
 npm run dev
 ```
 The frontend dev server runs on `http://localhost:5173` and proxies API requests to the backend.
+
+---
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+
