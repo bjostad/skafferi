@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true, // Listen on all network interfaces (0.0.0.0) during 'npm run dev' only
     port: 5173,
     proxy: {
       '/api': {
