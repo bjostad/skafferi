@@ -12,7 +12,7 @@
 
     <groupId>com.skafferi</groupId>
     <artifactId>skafferi-backend</artifactId>
-    <version>1.0.0</version>
+    <version>0.5.0-beta</version>
     <name>Skafferi</name>
     <description>Self-Hosted Pantry &amp; Inventory Management Application</description>
 

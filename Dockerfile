@@ -44,7 +44,7 @@ ENV PORT=8080
 ENV DATA_DIR=/data
 ENV DATABASE_PATH=/data/skafferi.db
 
-COPY --from=backend-builder /app/backend/target/skafferi-backend-1.0.0.jar /app/skafferi.jar
+COPY --from=backend-builder /app/backend/target/skafferi-backend-*.jar /app/skafferi.jar
 
 EXPOSE 8080
 
