@@ -21,22 +21,47 @@ It bridges the gap between your recipes (**Mealie**), your mobile grocery list (
 
 ## 🚀 Quick Start with Docker
 
-### Using Docker Compose (Recommended)
+### 1. Using Docker Compose (Recommended)
 
-1. Clone or copy the project:
-   ```bash
-   git clone https://github.com/your-repo/skafferi.git
-   cd skafferi
-   ```
+Create a `docker-compose.yml` file:
 
-2. Start the container:
-   ```bash
-   docker compose up -d --build
-   ```
+```yaml
+services:
+  skafferi:
+    image: ghcr.io/bjostad/skafferi:latest
+    container_name: skafferi
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - skafferi_data:/data
+    environment:
+      - PORT=8080
+      - DATA_DIR=/data
+      - DATABASE_PATH=/data/skafferi.db
 
-3. Open your browser at **`http://localhost:8080`**.
+volumes:
+  skafferi_data:
+```
 
-Data is persisted inside the `skafferi_data` volume at `/data/skafferi.db`.
+Start the container:
+```bash
+docker compose up -d
+```
+
+### 2. Using Docker CLI
+
+```bash
+docker run -d \
+  --name skafferi \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v skafferi_data:/data \
+  ghcr.io/bjostad/skafferi:latest
+```
+
+Open your browser at **`http://localhost:8080`**.
+Data is automatically persisted in the `skafferi_data` volume at `/data/skafferi.db`.
 
 ---
 

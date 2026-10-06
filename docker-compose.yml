@@ -1,6 +1,6 @@
 services:
   skafferi:
-    image: skafferi:latest
+    image: ghcr.io/bjostad/skafferi:latest
     build:
       context: .
       dockerfile: Dockerfile
