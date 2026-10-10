@@ -39,12 +39,14 @@ public class ItemController {
 
     @GetMapping
     public List<PantryItemSummaryDto> getAllItems(
-            @RequestParam(required = false) String locationId,
-            @RequestParam(required = false) String categoryId,
+            @RequestParam(required = false) List<String> locationId,
+            @RequestParam(required = false) List<String> categoryId,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) List<String> stockFilter,
+            @RequestParam(required = false) List<String> freshnessFilter,
             @RequestParam(required = false) String status,
             @RequestParam(required = false, defaultValue = "NAME") String sortBy) {
-        return inventoryService.getAllPantrySummaries(locationId, categoryId, search, status, sortBy);
+        return inventoryService.getAllPantrySummaries(locationId, categoryId, search, stockFilter, freshnessFilter, status, sortBy);
     }
 
     @GetMapping("/notifications")

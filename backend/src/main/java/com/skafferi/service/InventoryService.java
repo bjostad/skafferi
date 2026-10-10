@@ -42,7 +42,30 @@ public class InventoryService {
         this.purchaseRecordService = purchaseRecordService;
     }
 
-    public List<PantryItemSummaryDto> getAllPantrySummaries(String locationId, String categoryId, String searchQuery, String statusFilter, String sortBy) {
+    private List<String> cleanFilterList(List<String> raw) {
+        if (raw == null) return List.of();
+        return raw.stream()
+                .filter(Objects::nonNull)
+                .flatMap(s -> Arrays.stream(s.split(",")))
+                .map(String::trim)
+                .filter(s -> !s.isBlank() && !"ALL".equalsIgnoreCase(s))
+                .collect(Collectors.toList());
+    }
+
+    public List<PantryItemSummaryDto> getAllPantrySummaries(
+            List<String> locationIds,
+            List<String> categoryIds,
+            String searchQuery,
+            List<String> stockFilters,
+            List<String> freshnessFilters,
+            String legacyStatus,
+            String sortBy) {
+
+        List<String> cleanLocations = cleanFilterList(locationIds);
+        List<String> cleanCategories = cleanFilterList(categoryIds);
+        List<String> cleanStocks = cleanFilterList(stockFilters);
+        List<String> cleanFreshness = cleanFilterList(freshnessFilters);
+
         List<Item> items;
         if (searchQuery != null && !searchQuery.isBlank()) {
             items = itemRepository.findByNameContainingIgnoreCaseOrBrandContainingIgnoreCase(searchQuery.trim(), searchQuery.trim());
@@ -51,35 +74,76 @@ public class InventoryService {
         }
 
         List<PantryItemSummaryDto> summaries = items.stream()
-                .filter(item -> categoryId == null || categoryId.isBlank() || (item.getCategory() != null && item.getCategory().getId().equalsIgnoreCase(categoryId)))
+                .filter(item -> {
+                    if (cleanCategories.isEmpty()) return true;
+                    return item.getCategory() != null && cleanCategories.stream()
+                            .anyMatch(catId -> catId.equalsIgnoreCase(item.getCategory().getId()));
+                })
                 .map(this::mapToSummary)
                 .filter(summary -> {
-                    if (locationId == null || locationId.isBlank()) return true;
-                    // Check if item has batches in this location, or default location matches
-                    boolean hasBatchInLocation = summary.batches().stream().anyMatch(b -> b.locationId().equalsIgnoreCase(locationId));
-                    boolean defaultMatches = summary.defaultLocation() != null && summary.defaultLocation().getId().equalsIgnoreCase(locationId);
+                    if (cleanLocations.isEmpty()) return true;
+                    boolean hasBatchInLocation = summary.batches().stream()
+                            .anyMatch(b -> cleanLocations.stream().anyMatch(locId -> locId.equalsIgnoreCase(b.locationId())));
+                    boolean defaultMatches = summary.defaultLocation() != null && cleanLocations.stream()
+                            .anyMatch(locId -> locId.equalsIgnoreCase(summary.defaultLocation().getId()));
                     return hasBatchInLocation || defaultMatches;
                 })
                 .filter(summary -> {
-                    if (statusFilter == null || statusFilter.isBlank() || statusFilter.equalsIgnoreCase("ALL")) {
+                    if (cleanStocks.isEmpty()) return true;
+                    return cleanStocks.stream().anyMatch(stock -> {
+                        if ("IN_STOCK".equalsIgnoreCase(stock)) {
+                            return summary.totalQuantity() > 0;
+                        }
+                        if ("LOW_STOCK".equalsIgnoreCase(stock)) {
+                            return summary.isLowStock() && !summary.isOutOfStock();
+                        }
+                        if ("OUT_OF_STOCK".equalsIgnoreCase(stock)) {
+                            return summary.isOutOfStock();
+                        }
+                        return false;
+                    });
+                })
+                .filter(summary -> {
+                    if (cleanFreshness.isEmpty()) return true;
+                    return cleanFreshness.stream().anyMatch(freshness -> {
+                        if ("FRESH".equalsIgnoreCase(freshness)) {
+                            return "FRESH".equalsIgnoreCase(summary.expiryStatus()) && !summary.freshCheckNeeded();
+                        }
+                        if ("EXPIRING_SOON".equalsIgnoreCase(freshness)) {
+                            return "EXPIRING_SOON".equalsIgnoreCase(summary.expiryStatus());
+                        }
+                        if ("EXPIRED".equalsIgnoreCase(freshness)) {
+                            return "EXPIRED".equalsIgnoreCase(summary.expiryStatus());
+                        }
+                        if ("FRESH_CHECK".equalsIgnoreCase(freshness)) {
+                            return summary.freshCheckNeeded();
+                        }
+                        return false;
+                    });
+                })
+                .filter(summary -> {
+                    if (!cleanStocks.isEmpty() || !cleanFreshness.isEmpty()) {
                         return true;
                     }
-                    if (statusFilter.equalsIgnoreCase("EXPIRED")) {
+                    if (legacyStatus == null || legacyStatus.isBlank() || "ALL".equalsIgnoreCase(legacyStatus)) {
+                        return true;
+                    }
+                    if ("EXPIRED".equalsIgnoreCase(legacyStatus)) {
                         return "EXPIRED".equalsIgnoreCase(summary.expiryStatus());
                     }
-                    if (statusFilter.equalsIgnoreCase("EXPIRING_SOON")) {
+                    if ("EXPIRING_SOON".equalsIgnoreCase(legacyStatus)) {
                         return "EXPIRING_SOON".equalsIgnoreCase(summary.expiryStatus());
                     }
-                    if (statusFilter.equalsIgnoreCase("FRESH_CHECK")) {
+                    if ("FRESH_CHECK".equalsIgnoreCase(legacyStatus)) {
                         return summary.freshCheckNeeded();
                     }
-                    if (statusFilter.equalsIgnoreCase("FRESH")) {
+                    if ("FRESH".equalsIgnoreCase(legacyStatus)) {
                         return "FRESH".equalsIgnoreCase(summary.expiryStatus()) && !summary.freshCheckNeeded();
                     }
-                    if (statusFilter.equalsIgnoreCase("LOW_STOCK")) {
+                    if ("LOW_STOCK".equalsIgnoreCase(legacyStatus)) {
                         return summary.isLowStock() && !summary.isOutOfStock();
                     }
-                    if (statusFilter.equalsIgnoreCase("OUT_OF_STOCK")) {
+                    if ("OUT_OF_STOCK".equalsIgnoreCase(legacyStatus)) {
                         return summary.isOutOfStock();
                     }
                     return true;
@@ -89,7 +153,6 @@ public class InventoryService {
         // Sorting
         Comparator<PantryItemSummaryDto> comparator;
         if ("EXPIRY".equalsIgnoreCase(sortBy)) {
-            // Expired first, then expiring soon, then fresh, then no expiry
             comparator = Comparator.comparing(
                     s -> s.daysUntilEarliestExpiry() != null ? s.daysUntilEarliestExpiry() : Integer.MAX_VALUE
             );
@@ -98,12 +161,17 @@ public class InventoryService {
         } else if ("QTY_DESC".equalsIgnoreCase(sortBy)) {
             comparator = Comparator.comparingDouble(PantryItemSummaryDto::totalQuantity).reversed();
         } else {
-            // Default A-Z
             comparator = Comparator.comparing(PantryItemSummaryDto::name, String.CASE_INSENSITIVE_ORDER);
         }
 
         summaries.sort(comparator);
         return summaries;
+    }
+
+    public List<PantryItemSummaryDto> getAllPantrySummaries(String locationId, String categoryId, String searchQuery, String statusFilter, String sortBy) {
+        List<String> locs = (locationId != null && !locationId.isBlank()) ? List.of(locationId) : null;
+        List<String> cats = (categoryId != null && !categoryId.isBlank()) ? List.of(categoryId) : null;
+        return getAllPantrySummaries(locs, cats, searchQuery, null, null, statusFilter, sortBy);
     }
 
     public List<PantryItemSummaryDto> getAllPantrySummaries(String locationId, String categoryId, String searchQuery) {

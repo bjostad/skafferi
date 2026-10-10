@@ -9,8 +9,14 @@ const api = axios.create({
 
 export default {
   // Items & Inventory
-  getItems(params) {
-    return api.get('/items', { params });
+  getItems(params = {}) {
+    const serializedParams = { ...params };
+    ['locationId', 'categoryId', 'stockFilter', 'freshnessFilter'].forEach((key) => {
+      if (Array.isArray(serializedParams[key])) {
+        serializedParams[key] = serializedParams[key].filter(Boolean).join(',');
+      }
+    });
+    return api.get('/items', { params: serializedParams });
   },
   getItem(id) {
     return api.get(`/items/${id}`);

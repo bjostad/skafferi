@@ -124,6 +124,12 @@
         <!-- Action Buttons -->
         <div class="flex items-center gap-1">
           <button 
+            @click="$emit('add-shopping-list', item)"
+            title="Add to Shopping List"
+            class="p-1.5 rounded-lg text-slate-300 hover:text-brand-300 hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors">
+            <ShoppingCart class="w-3.5 h-3.5 text-brand-400" />
+          </button>
+          <button 
             @click="$emit('move-zone', item)"
             title="Move / Transfer Storage Zone"
             class="p-1.5 rounded-lg text-slate-300 hover:text-brand-300 hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors">
@@ -165,7 +171,7 @@
 <script setup>
 import { 
   Package, AlertCircle, Clock, CheckCircle, Plus, Minus, 
-  CalendarPlus, Edit2, ArrowRightLeft, CheckCheck, Receipt
+  CalendarPlus, Edit2, ArrowRightLeft, CheckCheck, Receipt, ShoppingCart
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -175,7 +181,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['adjust', 'edit', 'add-batch', 'move-zone', 'consume', 'history']);
+const emit = defineEmits(['adjust', 'edit', 'add-batch', 'move-zone', 'consume', 'history', 'add-shopping-list']);
 
 function adjust(delta) {
   emit('adjust', { itemId: props.item.id, delta });
