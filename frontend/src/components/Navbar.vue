@@ -4,8 +4,35 @@
       
       <!-- Brand Logo -->
       <router-link to="/" class="flex items-center gap-2.5 group">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center shadow-lg shadow-brand-500/25 group-hover:scale-105 transition-transform">
-          <Package class="w-5 h-5 text-white" />
+        <div class="w-10 h-10 rounded-xl bg-[#68458c] border border-brand-400/30 flex items-center justify-center shadow-lg shadow-brand-950/40 group-hover:scale-105 transition-transform overflow-hidden p-1">
+          <svg viewBox="0 0 512 512" class="w-full h-full text-white" fill="none">
+            <g transform="translate(256, 272) scale(1.35) translate(-256, -262.5)">
+              <!-- 1. Left: Jar -->
+              <rect x="94" y="195" width="92" height="24" rx="8" fill="#FFFFFF" />
+              <path d="M 104 228
+                       C 104 222, 107 219, 114 219
+                       L 166 219
+                       C 173 219, 176 222, 176 228
+                       C 184 238, 194 252, 194 270
+                       L 194 360
+                       C 194 374, 184 380, 170 380
+                       L 110 380
+                       C 96 380, 86 374, 86 360
+                       L 86 270
+                       C 86 252, 96 238, 104 228 Z" fill="#FFFFFF" />
+              <rect x="108" y="272" width="64" height="60" rx="8" fill="#68458c" />
+
+              <!-- 2. Middle: Tall Box Side Profile -->
+              <rect x="226" y="145" width="60" height="235" rx="8" fill="#FFFFFF" />
+              <rect x="240" y="195" width="32" height="120" rx="6" fill="#68458c" />
+
+              <!-- 3. Right: Can -->
+              <rect x="314" y="210" width="112" height="12" rx="6" fill="#FFFFFF" />
+              <rect x="320" y="222" width="100" height="146" rx="4" fill="#FFFFFF" />
+              <rect x="314" y="368" width="112" height="12" rx="6" fill="#FFFFFF" />
+              <rect x="336" y="254" width="68" height="74" rx="6" fill="#68458c" />
+            </g>
+          </svg>
         </div>
         <div>
           <span class="font-extrabold text-xl tracking-tight text-white">

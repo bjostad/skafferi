@@ -163,6 +163,26 @@
           </div>
         </div>
 
+        <!-- Optional Purchase Price & Store (if new item) -->
+        <div v-if="!isEdit" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-300 block mb-1">Purchase Price ($) (Optional)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              v-model.number="form.unitPrice" 
+              placeholder="0.00" 
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-300 block mb-1">Store / Merchant (Optional)</label>
+            <input 
+              v-model="form.store" 
+              placeholder="e.g. Costco, Fred Meyer" 
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+          </div>
+        </div>
+
         <!-- Low Stock Threshold & Bring Sync -->
         <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3">
           <div class="flex items-center justify-between">
@@ -297,6 +317,8 @@ const form = reactive({
   defaultPurchaseAmount: props.initialData?.defaultPurchaseAmount || '',
   perishable: props.initialData?.perishable ?? (props.initialData?.category?.id === 'cat-produce' || props.initialData?.categoryId === 'cat-produce'),
   notes: props.initialData?.notes || '',
+  unitPrice: null,
+  store: '',
 });
 
 const existingMatch = computed(() => {
@@ -381,6 +403,8 @@ async function save() {
         purchasedDate: form.purchasedDate ? form.purchasedDate : null,
         note: form.notes,
         barcode: form.barcode,
+        unitPrice: form.unitPrice != null ? form.unitPrice : null,
+        store: form.store ? form.store.trim() : null,
       });
     }
 

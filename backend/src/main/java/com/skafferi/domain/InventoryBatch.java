@@ -35,6 +35,10 @@ public class InventoryBatch {
 
     private String barcode;
 
+    private Double unitPrice;
+
+    private String store;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -139,6 +143,22 @@ public class InventoryBatch {
 
     public void setBarcode(String barcode) {
         this.barcode = barcode;
+    }
+
+    public Double getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(Double unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+
+    public String getStore() {
+        return store;
+    }
+
+    public void setStore(String store) {
+        this.store = store;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -1,0 +1,17 @@
+{
+  "name": "Skafferi",
+  "short_name": "Skafferi",
+  "description": "Self-Hosted Pantry & Inventory Management Application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#68458c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

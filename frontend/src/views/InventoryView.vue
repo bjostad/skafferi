@@ -121,7 +121,8 @@
         @edit="openEdit"
         @add-batch="openAddBatch"
         @move-zone="openMoveZone"
-        @consume="handleConsume" />
+        @consume="handleConsume"
+        @history="openPurchaseHistory" />
     </div>
 
     <!-- Empty State -->
@@ -163,6 +164,11 @@
       @close="moveZoneModalOpen = false"
       @transferred="fetchItems" />
 
+    <PurchaseHistoryModal 
+      v-if="historyModalOpen" 
+      :item="itemForHistory" 
+      @close="historyModalOpen = false" />
+
   </div>
 </template>
 
@@ -176,6 +182,7 @@ import ItemCard from '../components/ItemCard.vue';
 import AddItemModal from '../components/AddItemModal.vue';
 import AddBatchModal from '../components/AddBatchModal.vue';
 import MoveZoneModal from '../components/MoveZoneModal.vue';
+import PurchaseHistoryModal from '../components/PurchaseHistoryModal.vue';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
 
@@ -202,6 +209,9 @@ const itemForBatch = ref(null);
 
 const moveZoneModalOpen = ref(false);
 const itemForMove = ref(null);
+
+const historyModalOpen = ref(false);
+const itemForHistory = ref(null);
 
 onMounted(async () => {
   await Promise.all([loadMetadata(), fetchItems()]);
@@ -273,6 +283,11 @@ function openAddBatch(item) {
 function openMoveZone(item) {
   itemForMove.value = item;
   moveZoneModalOpen.value = true;
+}
+
+function openPurchaseHistory(item) {
+  itemForHistory.value = item;
+  historyModalOpen.value = true;
 }
 
 async function handleConsume(item) {

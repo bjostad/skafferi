@@ -57,47 +57,49 @@ public class BarcodeLookupService {
             );
         }
 
-        // 2. Query Open Food Facts
+        // 2. Query Open Food Facts with automatic padding normalization
         try {
-            String offUrl = "https://world.openfoodfacts.org/api/v2/product/" + cleanedBarcode + ".json";
-            String response = restClient.get()
-                    .uri(offUrl)
-                    .retrieve()
-                    .body(String.class);
+            JsonNode product = fetchProductNode(cleanedBarcode);
+            if (product == null && cleanedBarcode.startsWith("0")) {
+                // Try standard 12-digit UPC or unpadded barcode
+                String unpadded = cleanedBarcode.replaceFirst("^0+", "");
+                if (unpadded.length() == 11) {
+                    product = fetchProductNode("0" + unpadded);
+                }
+                if (product == null) {
+                    product = fetchProductNode(unpadded);
+                }
+            }
 
-            if (response != null) {
-                JsonNode root = objectMapper.readTree(response);
-                if (root.has("status") && root.get("status").asInt() == 1 && root.has("product")) {
-                    JsonNode product = root.get("product");
-                    String productName = product.hasNonNull("product_name") ? product.get("product_name").asText() : "";
-                    String brand = product.hasNonNull("brands") ? product.get("brands").asText() : "";
-                    String imageUrl = product.hasNonNull("image_front_url") ? product.get("image_front_url").asText() : null;
-                    String packageSize = product.hasNonNull("quantity") ? product.get("quantity").asText() : null;
+            if (product != null) {
+                String productName = product.hasNonNull("product_name") ? product.get("product_name").asText() : "";
+                String brand = product.hasNonNull("brands") ? product.get("brands").asText() : "";
+                String imageUrl = product.hasNonNull("image_front_url") ? product.get("image_front_url").asText() : null;
+                String packageSize = product.hasNonNull("quantity") ? product.get("quantity").asText() : null;
 
-                    if (!productName.isBlank()) {
-                        String category = deduceCategoryFromOff(product);
-                        String existingId = null;
-                        Double currentQty = null;
-                        Optional<Item> existingByName = itemRepository.findByNameIgnoreCase(productName.trim());
-                        if (existingByName.isPresent()) {
-                            existingId = existingByName.get().getId();
-                            currentQty = batchRepository.getTotalQuantityForItem(existingId);
-                        }
-
-                        return new BarcodeLookupResult(
-                                true,
-                                cleanedBarcode,
-                                productName,
-                                brand,
-                                imageUrl,
-                                category,
-                                "count",
-                                "OPEN_FOOD_FACTS",
-                                existingId,
-                                packageSize,
-                                currentQty
-                        );
+                if (!productName.isBlank()) {
+                    String category = deduceCategoryFromOff(product);
+                    String existingId = null;
+                    Double currentQty = null;
+                    Optional<Item> existingByName = itemRepository.findByNameIgnoreCase(productName.trim());
+                    if (existingByName.isPresent()) {
+                        existingId = existingByName.get().getId();
+                        currentQty = batchRepository.getTotalQuantityForItem(existingId);
                     }
+
+                    return new BarcodeLookupResult(
+                            true,
+                            cleanedBarcode,
+                            productName,
+                            brand,
+                            imageUrl,
+                            category,
+                            "count",
+                            "OPEN_FOOD_FACTS",
+                            existingId,
+                            packageSize,
+                            currentQty
+                    );
                 }
             }
         } catch (Exception e) {
@@ -139,5 +141,26 @@ public class BarcodeLookupService {
             }
         }
         return "cat-canned";
+    }
+
+    private JsonNode fetchProductNode(String barcode) {
+        if (barcode == null || barcode.isBlank()) return null;
+        try {
+            String offUrl = "https://world.openfoodfacts.org/api/v2/product/" + barcode + ".json";
+            String response = restClient.get()
+                    .uri(offUrl)
+                    .retrieve()
+                    .body(String.class);
+
+            if (response != null) {
+                JsonNode root = objectMapper.readTree(response);
+                if (root.has("status") && root.get("status").asInt() == 1 && root.has("product")) {
+                    return root.get("product");
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Open Food Facts query failed for barcode {}: {}", barcode, e.getMessage());
+        }
+        return null;
     }
 }

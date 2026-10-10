@@ -24,19 +24,22 @@ public class InventoryService {
     private final CategoryRepository categoryRepository;
     private final BringSyncService bringSyncService;
     private final SettingsService settingsService;
+    private final PurchaseRecordService purchaseRecordService;
 
     public InventoryService(ItemRepository itemRepository,
                             InventoryBatchRepository batchRepository,
                             LocationRepository locationRepository,
                             CategoryRepository categoryRepository,
                             BringSyncService bringSyncService,
-                            SettingsService settingsService) {
+                            SettingsService settingsService,
+                            PurchaseRecordService purchaseRecordService) {
         this.itemRepository = itemRepository;
         this.batchRepository = batchRepository;
         this.locationRepository = locationRepository;
         this.categoryRepository = categoryRepository;
         this.bringSyncService = bringSyncService;
         this.settingsService = settingsService;
+        this.purchaseRecordService = purchaseRecordService;
     }
 
     public List<PantryItemSummaryDto> getAllPantrySummaries(String locationId, String categoryId, String searchQuery, String statusFilter, String sortBy) {
@@ -168,8 +171,26 @@ public class InventoryService {
         batch.setPurchasedDate(dto.purchasedDate() != null ? dto.purchasedDate() : LocalDate.now());
         batch.setNote(dto.note());
         batch.setBarcode(dto.barcode() != null ? dto.barcode() : item.getBarcode());
+        batch.setUnitPrice(dto.unitPrice());
+        batch.setStore(dto.store());
 
         InventoryBatch saved = batchRepository.save(batch);
+
+        if (dto.unitPrice() != null || (dto.store() != null && !dto.store().isBlank())) {
+            Double totalPrice = dto.unitPrice() != null ? dto.unitPrice() * dto.quantity() : null;
+            purchaseRecordService.recordPurchase(
+                    item,
+                    batch.getPurchasedDate(),
+                    dto.store(),
+                    dto.quantity(),
+                    batch.getUnit(),
+                    dto.unitPrice(),
+                    totalPrice,
+                    dto.note(),
+                    "MANUAL"
+            );
+        }
+
         checkAndSyncToBring(item);
         return saved;
     }
@@ -314,15 +335,35 @@ public class InventoryService {
                 location = item.getDefaultLocation() != null ? item.getDefaultLocation() : locationRepository.findAll().get(0);
             }
 
+            LocalDate purchaseDate = itemDto.purchasedDate() != null ? itemDto.purchasedDate()
+                    : (request.transactionDate() != null ? request.transactionDate() : LocalDate.now());
+            String storeName = itemDto.store() != null && !itemDto.store().isBlank() ? itemDto.store() : request.storeName();
+
             InventoryBatch batch = new InventoryBatch();
             batch.setItem(item);
             batch.setLocation(location);
             batch.setQuantity(itemDto.quantity());
             batch.setUnit(itemDto.unit() != null ? itemDto.unit() : item.getDefaultUnit());
             batch.setExpirationDate(itemDto.expirationDate());
-            batch.setPurchasedDate(LocalDate.now());
+            batch.setPurchasedDate(purchaseDate);
             batch.setBarcode(itemDto.barcode());
+            batch.setUnitPrice(itemDto.unitPrice());
+            batch.setStore(storeName);
             batchRepository.save(batch);
+
+            Double totalCost = itemDto.totalPrice() != null ? itemDto.totalPrice()
+                    : (itemDto.unitPrice() != null ? itemDto.unitPrice() * itemDto.quantity() : null);
+            purchaseRecordService.recordPurchase(
+                    item,
+                    purchaseDate,
+                    storeName,
+                    itemDto.quantity(),
+                    itemDto.unit() != null ? itemDto.unit() : item.getDefaultUnit(),
+                    itemDto.unitPrice(),
+                    totalCost,
+                    null,
+                    "RECEIPT"
+            );
         }
     }
 
@@ -410,7 +451,9 @@ public class InventoryService {
                 b.getOpenedDate(),
                 b.getPurchasedDate(),
                 b.getNote(),
-                b.getBarcode()
+                b.getBarcode(),
+                b.getUnitPrice(),
+                b.getStore()
         )).collect(Collectors.toList());
 
         return new PantryItemSummaryDto(

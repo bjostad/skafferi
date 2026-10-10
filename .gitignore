@@ -14,9 +14,7 @@ backend/.mvn/timing.properties
 backend/.flattened-pom.xml
 
 # Spring static build artifacts (generated from frontend build)
-backend/src/main/resources/static/assets/
-backend/src/main/resources/static/index.html
-backend/src/main/resources/static/favicon.svg
+backend/src/main/resources/static/
 
 # Database & SQLite files
 data/

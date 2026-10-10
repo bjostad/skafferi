@@ -14,6 +14,8 @@ public interface InventoryBatchRepository extends JpaRepository<InventoryBatch, 
 
     List<InventoryBatch> findByItemIdOrderByExpirationDateAsc(String itemId);
 
+    void deleteByItemId(String itemId);
+
     List<InventoryBatch> findByLocationId(String locationId);
 
     List<InventoryBatch> findByQuantityGreaterThan(double minQuantity);

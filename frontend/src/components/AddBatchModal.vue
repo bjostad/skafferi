@@ -52,6 +52,26 @@
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
         </div>
 
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-300 block mb-1">Unit Price ($) (Optional)</label>
+            <input 
+              type="number" 
+              step="0.01" 
+              v-model.number="form.unitPrice" 
+              placeholder="0.00" 
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-brand-500" />
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-slate-300 block mb-1">Store (Optional)</label>
+            <input 
+              v-model="form.store" 
+              placeholder="e.g. Fred Meyer, Costco" 
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+          </div>
+        </div>
+
         <div>
           <label class="text-xs font-semibold text-slate-300 block mb-1">Note (Optional)</label>
           <input 
@@ -102,6 +122,8 @@ const form = reactive({
   unit: props.item.defaultUnit || 'count',
   expirationDate: '',
   note: '',
+  unitPrice: null,
+  store: '',
 });
 
 onMounted(async () => {

@@ -136,6 +136,12 @@
             <CalendarPlus class="w-3.5 h-3.5 text-brand-400" />
           </button>
           <button 
+            @click="$emit('history', item)"
+            title="Purchase & Price History"
+            class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors">
+            <Receipt class="w-3.5 h-3.5 text-emerald-400" />
+          </button>
+          <button 
             @click="$emit('edit', item)"
             title="Edit Item"
             class="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 border border-transparent hover:border-slate-700 transition-colors">
@@ -159,7 +165,7 @@
 <script setup>
 import { 
   Package, AlertCircle, Clock, CheckCircle, Plus, Minus, 
-  CalendarPlus, Edit2, ArrowRightLeft, CheckCheck 
+  CalendarPlus, Edit2, ArrowRightLeft, CheckCheck, Receipt
 } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -169,7 +175,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['adjust', 'edit', 'add-batch', 'move-zone', 'consume']);
+const emit = defineEmits(['adjust', 'edit', 'add-batch', 'move-zone', 'consume', 'history']);
 
 function adjust(delta) {
   emit('adjust', { itemId: props.item.id, delta });

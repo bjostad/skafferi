@@ -87,6 +87,17 @@ export default {
     return api.get(`/barcode/${code}`);
   },
 
+  // Purchases
+  getItemPurchases(itemId) {
+    return api.get(`/items/${itemId}/purchases`);
+  },
+  addPurchaseRecord(itemId, data) {
+    return api.post(`/items/${itemId}/purchases`, data);
+  },
+  deletePurchaseRecord(itemId, purchaseId) {
+    return api.delete(`/items/${itemId}/purchases/${purchaseId}`);
+  },
+
   // Receipts
   getReceiptProviders() {
     return api.get('/receipts/providers');
@@ -94,8 +105,8 @@ export default {
   parseReceipt(rawText, providerId = 'auto') {
     return api.post('/receipts/parse', { rawText, providerId });
   },
-  commitReceipt(storeName, items) {
-    return api.post('/receipts/commit', { storeName, items });
+  commitReceipt(storeName, items, transactionDate = null) {
+    return api.post('/receipts/commit', { storeName, items, transactionDate });
   },
 
   // Bring!

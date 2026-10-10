@@ -3,9 +3,14 @@ package com.skafferi.controller;
 import com.skafferi.domain.Item;
 import com.skafferi.dto.ItemDto;
 import com.skafferi.dto.PantryItemSummaryDto;
+import com.skafferi.dto.PurchaseRecordDto;
+import com.skafferi.repository.InventoryBatchRepository;
 import com.skafferi.repository.ItemRepository;
+import com.skafferi.repository.PurchaseRecordRepository;
 import com.skafferi.service.InventoryService;
+import com.skafferi.service.PurchaseRecordService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,10 +21,20 @@ public class ItemController {
 
     private final InventoryService inventoryService;
     private final ItemRepository itemRepository;
+    private final PurchaseRecordService purchaseRecordService;
+    private final PurchaseRecordRepository purchaseRecordRepository;
+    private final InventoryBatchRepository batchRepository;
 
-    public ItemController(InventoryService inventoryService, ItemRepository itemRepository) {
+    public ItemController(InventoryService inventoryService,
+                          ItemRepository itemRepository,
+                          PurchaseRecordService purchaseRecordService,
+                          PurchaseRecordRepository purchaseRecordRepository,
+                          InventoryBatchRepository batchRepository) {
         this.inventoryService = inventoryService;
         this.itemRepository = itemRepository;
+        this.purchaseRecordService = purchaseRecordService;
+        this.purchaseRecordRepository = purchaseRecordRepository;
+        this.batchRepository = batchRepository;
     }
 
     @GetMapping
@@ -54,7 +69,10 @@ public class ItemController {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<Void> deleteItem(@PathVariable String id) {
+        purchaseRecordRepository.deleteByItemId(id);
+        batchRepository.deleteByItemId(id);
         itemRepository.deleteById(id);
         return ResponseEntity.noContent().build();
     }
@@ -62,5 +80,39 @@ public class ItemController {
     @PostMapping("/{id}/reset-freshness")
     public ResponseEntity<PantryItemSummaryDto> resetFreshness(@PathVariable String id) {
         return ResponseEntity.ok(inventoryService.resetFreshness(id));
+    }
+
+    @GetMapping("/{id}/purchases")
+    public List<PurchaseRecordDto> getPurchasesForItem(@PathVariable String id) {
+        return purchaseRecordService.getPurchasesForItem(id);
+    }
+
+    @PostMapping("/{id}/purchases")
+    public ResponseEntity<PurchaseRecordDto> addPurchaseRecord(
+            @PathVariable String id,
+            @RequestBody PurchaseRecordDto dto) {
+        PurchaseRecordDto toSave = new PurchaseRecordDto(
+                dto.id(),
+                id,
+                dto.itemName(),
+                dto.purchasedDate(),
+                dto.store(),
+                dto.quantity(),
+                dto.unit(),
+                dto.unitPrice(),
+                dto.totalPrice(),
+                dto.notes(),
+                dto.source() != null ? dto.source() : "MANUAL",
+                null
+        );
+        return ResponseEntity.ok(purchaseRecordService.addPurchase(toSave));
+    }
+
+    @DeleteMapping("/{id}/purchases/{purchaseId}")
+    public ResponseEntity<Void> deletePurchaseRecord(
+            @PathVariable String id,
+            @PathVariable String purchaseId) {
+        purchaseRecordService.deletePurchase(purchaseId);
+        return ResponseEntity.noContent().build();
     }
 }
