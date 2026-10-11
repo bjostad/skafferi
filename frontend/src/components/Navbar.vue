@@ -79,14 +79,6 @@
             {{ pendingMealCount }}
           </span>
         </router-link>
-
-        <router-link 
-          to="/analytics" 
-          class="px-3.5 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
-          :class="$route.path === '/analytics' ? 'bg-brand-500/25 text-brand-200 border border-brand-400/50 font-bold shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'">
-          <BarChart3 class="w-4 h-4" />
-          Analytics
-        </router-link>
       </div>
 
       <!-- Quick Action Buttons & User Menu -->
@@ -309,8 +301,19 @@
               </div>
             </div>
 
-            <!-- Settings Links -->
+            <!-- User Menu Links -->
             <div class="p-1.5 space-y-0.5">
+              <router-link 
+                to="/analytics" 
+                @click="userMenuOpen = false"
+                class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-200 hover:text-brand-200 hover:bg-slate-800 transition-colors"
+                :class="$route.path === '/analytics' ? 'text-brand-300 font-bold bg-brand-950/40 border border-brand-500/30' : ''">
+                <BarChart3 class="w-4 h-4 text-brand-400" />
+                <span>Analytics &amp; Price Tracker</span>
+              </router-link>
+
+              <div class="border-t border-slate-800 my-1"></div>
+
               <router-link 
                 to="/settings?section=locations" 
                 @click="userMenuOpen = false"
@@ -391,10 +394,6 @@
       <router-link to="/shopping" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/shopping' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <ShoppingCart class="w-4 h-4" />
         Shopping
-      </router-link>
-      <router-link to="/analytics" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/analytics' ? 'text-brand-400 font-bold' : 'text-slate-400'">
-        <BarChart3 class="w-4 h-4" />
-        Analytics
       </router-link>
       <router-link to="/settings" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/settings' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <Settings class="w-4 h-4" />
