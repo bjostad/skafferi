@@ -68,6 +68,7 @@
         </router-link>
 
         <router-link 
+          v-if="isRecipesMenuVisible"
           to="/recipes" 
           class="px-3.5 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
           :class="$route.path === '/recipes' ? 'bg-brand-500/25 text-brand-200 border border-brand-400/50 font-bold shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'">
@@ -380,7 +381,11 @@
         <Clock class="w-4 h-4" />
         Expiring
       </router-link>
-      <router-link to="/recipes" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/recipes' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+      <router-link 
+        v-if="isRecipesMenuVisible"
+        to="/recipes" 
+        class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" 
+        :class="$route.path === '/recipes' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <div class="relative">
           <ChefHat class="w-4 h-4" />
           <span 
@@ -427,6 +432,13 @@ const notifMenuRef = ref(null);
 const notifSummary = ref(null);
 const pendingMealCount = ref(0);
 
+const hasMealieConfigured = ref(false);
+const hasLlmConfigured = ref(false);
+
+const isRecipesMenuVisible = computed(() => {
+  return hasMealieConfigured.value || hasLlmConfigured.value;
+});
+
 const currentUser = computed(() => auth.getCurrentUser());
 const allUsers = computed(() => auth.state.allUsers);
 const providers = computed(() => auth.state.providers || {});
@@ -447,6 +459,17 @@ async function loadPendingMealsCount() {
     pendingMealCount.value = res.data?.count || 0;
   } catch (err) {
     console.error('Failed to load pending meals count:', err);
+  }
+}
+
+async function loadIntegrationSettings() {
+  try {
+    const res = await api.getSettings();
+    const data = res.data || {};
+    hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
+    hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
+  } catch (err) {
+    console.error('Failed to load integration settings:', err);
   }
 }
 
@@ -473,14 +496,16 @@ function goToItem(item) {
 }
 
 onMounted(async () => {
-  await Promise.all([auth.loadUsers(), loadNotifications(), loadPendingMealsCount()]);
+  await Promise.all([auth.loadUsers(), loadNotifications(), loadPendingMealsCount(), loadIntegrationSettings()]);
   document.addEventListener('click', handleClickOutside);
   window.addEventListener('pending-meals-changed', handlePendingMealsChanged);
+  window.addEventListener('settings-updated', loadIntegrationSettings);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   window.removeEventListener('pending-meals-changed', handlePendingMealsChanged);
+  window.removeEventListener('settings-updated', loadIntegrationSettings);
 });
 
 function switchUser(user) {

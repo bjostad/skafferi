@@ -662,7 +662,7 @@
             <div class="flex items-center gap-2">
               <h3 class="font-bold text-lg text-white">Integrations &amp; APIs</h3>
               <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                Bring! &bull; Mealie &bull; Kroger
+                Bring! &bull; Mealie &bull; Kroger &bull; AI Chef
               </span>
             </div>
             <p class="text-xs text-slate-400 mt-0.5">Connect external mobile lists, meal planning webhooks, and grocery catalogs.</p>
@@ -873,6 +873,91 @@
                 placeholder="e.g. 01400923" 
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
             </div>
+          </div>
+        </div>
+
+        <!-- 4. AI Zero-Waste Chef (LLM Integration) -->
+        <div class="bg-slate-800/80 rounded-2xl p-5 border border-slate-700/80 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-700/80 pb-3 flex-wrap gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm border border-amber-500/30">
+                <Sparkles class="w-4 h-4" />
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-white text-sm">AI Zero-Waste Chef (LLM Integration)</h4>
+                  <span 
+                    v-if="settings.hasLlmApiKey || (settings.llmApiKey && settings.llmApiKey !== '')" 
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Configured
+                  </span>
+                  <span 
+                    v-else 
+                    class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                    Key Required
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400">Generate creative, custom meal ideas from expiring ingredients using your chosen AI model.</p>
+              </div>
+            </div>
+
+            <button 
+              type="button" 
+              @click="testLlmConnection" 
+              :disabled="isTestingLlm || (!settings.llmApiKey && !settings.hasLlmApiKey)"
+              class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+              <Sparkles class="w-3.5 h-3.5 text-amber-400" :class="{ 'animate-spin': isTestingLlm }" />
+              <span>{{ isTestingLlm ? 'Testing...' : 'Test Connection' }}</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">AI Provider</label>
+              <select 
+                v-model="settings.llmProvider"
+                @change="onLlmProviderChange"
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+                <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
+                <option value="gemini">Google Gemini (Gemini 1.5 Flash)</option>
+                <option value="openrouter">OpenRouter (Multi-model)</option>
+                <option value="groq">Groq (Ultra-fast)</option>
+                <option value="ollama">Local Ollama (Self-hosted)</option>
+                <option value="custom">Custom (OpenAI-compatible)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">API Key *</label>
+              <input 
+                v-model="settings.llmApiKey" 
+                type="password" 
+                placeholder="sk-... or API Key" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">Model Name</label>
+              <input 
+                v-model="settings.llmModel" 
+                placeholder="e.g. gpt-4o-mini, gemini-1.5-flash" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]" />
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">API Base URL (Optional)</label>
+              <input 
+                v-model="settings.llmBaseUrl" 
+                placeholder="https://api.openai.com/v1" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]" />
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-750 text-[11px] text-slate-400 flex items-start gap-2">
+            <span class="text-amber-400 font-bold">💡 Tip:</span>
+            <span>Works with OpenAI, Google Gemini, OpenRouter, Groq, or self-hosted Ollama (`http://host.docker.internal:11434/v1`). Once configured, the <strong>Zero-Waste Chef</strong> tab appears in the Recipes view.</span>
           </div>
         </div>
 
@@ -1424,6 +1509,7 @@ const isSaving = ref(false);
 const isTestingBring = ref(false);
 const isTestingEmail = ref(false);
 const isSendingDigest = ref(false);
+const isTestingLlm = ref(false);
 
 const settings = reactive({
   bringEmail: '',
@@ -1457,6 +1543,12 @@ const settings = reactive({
   smtpEnabled: false,
   smtpDailyDigestEnabled: false,
   smtpWeeklyDigestEnabled: false,
+  llmApiKey: '',
+  llmProvider: 'openai',
+  llmModel: 'gpt-4o-mini',
+  llmBaseUrl: '',
+  hasLlmApiKey: false,
+  hasMealieConnection: false,
 });
 
 function formatShelfLifeDescription(days) {
@@ -1683,10 +1775,60 @@ async function deleteUser(u) {
   }
 }
 
+function onLlmProviderChange() {
+  switch (settings.llmProvider) {
+    case 'gemini':
+      settings.llmModel = 'gemini-1.5-flash';
+      settings.llmBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
+      break;
+    case 'openrouter':
+      settings.llmModel = 'google/gemini-flash-1.5';
+      settings.llmBaseUrl = 'https://openrouter.ai/api/v1';
+      break;
+    case 'groq':
+      settings.llmModel = 'llama-3.1-8b-instant';
+      settings.llmBaseUrl = 'https://api.groq.com/openai/v1';
+      break;
+    case 'ollama':
+      settings.llmModel = 'llama3.2:latest';
+      settings.llmBaseUrl = 'http://host.docker.internal:11434/v1';
+      break;
+    case 'openai':
+    default:
+      settings.llmModel = 'gpt-4o-mini';
+      settings.llmBaseUrl = 'https://api.openai.com/v1';
+      break;
+  }
+}
+
+async function testLlmConnection() {
+  isTestingLlm.value = true;
+  try {
+    const res = await api.testLlm({
+      apiKey: settings.llmApiKey,
+      provider: settings.llmProvider,
+      model: settings.llmModel,
+      baseUrl: settings.llmBaseUrl
+    });
+    if (res.data.success) {
+      showToast(res.data.message || 'LLM connected successfully!');
+    } else {
+      showToast('LLM test failed: ' + (res.data.error || 'Connection error'), 'error');
+    }
+  } catch (err) {
+    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message;
+    showToast('Failed to connect to LLM: ' + errorMsg, 'error');
+  } finally {
+    isTestingLlm.value = false;
+  }
+}
+
 async function saveAllSettings() {
   isSaving.value = true;
   try {
-    await api.saveSettings(settings);
+    const res = await api.saveSettings(settings);
+    Object.assign(settings, res.data);
+    window.dispatchEvent(new CustomEvent('settings-updated'));
     showToast('Settings saved successfully!');
   } catch (err) {
     showToast('Failed to save settings: ' + err.message, 'error');

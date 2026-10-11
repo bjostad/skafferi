@@ -148,6 +148,9 @@ export default {
   sendDigest(type = 'daily') {
     return api.post('/settings/send-digest', null, { params: { type } });
   },
+  testLlm(data) {
+    return api.post('/settings/test-llm', data);
+  },
 
   // Analytics
   getSpendSummary() {

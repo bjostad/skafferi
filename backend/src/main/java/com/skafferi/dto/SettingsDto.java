@@ -1,5 +1,8 @@
 package com.skafferi.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record SettingsDto(
         // Bring!
         String bringEmail,
@@ -45,6 +48,14 @@ public record SettingsDto(
         Boolean smtpEnabled,
         Boolean smtpDailyDigestEnabled,
         Boolean smtpWeeklyDigestEnabled,
+
+        // LLM Zero-Waste Chef
+        String llmApiKey,
+        String llmProvider,
+        String llmModel,
+        String llmBaseUrl,
+        Boolean hasLlmApiKey,
+        Boolean hasMealieConnection,
 
         // Application Metadata
         String appVersion

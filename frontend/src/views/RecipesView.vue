@@ -50,8 +50,9 @@
     </div>
 
     <!-- Mode Selector Tabs -->
-    <div class="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
+    <div v-if="hasMealieConfigured || hasLlmConfigured || pendingMeals.length > 0" class="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
       <button 
+        v-if="hasMealieConfigured"
         @click="activeTab = 'matches'"
         class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all"
         :class="activeTab === 'matches' ? 'bg-brand-500/20 text-brand-300 border border-brand-500/40 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'">
@@ -60,6 +61,7 @@
       </button>
 
       <button 
+        v-if="hasMealieConfigured || pendingMeals.length > 0"
         @click="activeTab = 'pending'"
         class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all relative"
         :class="activeTab === 'pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'">
@@ -73,6 +75,7 @@
       </button>
 
       <button 
+        v-if="hasLlmConfigured"
         @click="activeTab = 'generator'"
         class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all"
         :class="activeTab === 'generator' ? 'bg-brand-500/20 text-brand-300 border border-brand-500/40 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'">
@@ -81,10 +84,31 @@
       </button>
     </div>
 
+    <!-- Empty State: Neither Mealie nor LLM Configured -->
+    <div 
+      v-if="!hasMealieConfigured && !hasLlmConfigured && pendingMeals.length === 0" 
+      class="text-center py-16 bg-slate-900/60 border border-slate-800 rounded-3xl p-8 max-w-lg mx-auto space-y-4 shadow-lg my-6">
+      <div class="w-16 h-16 rounded-3xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400 mx-auto">
+        <ChefHat class="w-8 h-8" />
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-white">Recipe Features Not Configured</h3>
+        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
+          Connect your Mealie recipe instance to match recipes with in-stock pantry items, or add an LLM API key to generate creative zero-waste meals from expiring ingredients.
+        </p>
+      </div>
+      <router-link 
+        to="/settings?section=integrations" 
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-md transition-all">
+        <Settings class="w-4 h-4" />
+        <span>Configure in Settings</span>
+      </router-link>
+    </div>
+
     <!-- ========================================================================= -->
     <!-- TAB 1: PANTRY RECIPE MATCHES                                              -->
     <!-- ========================================================================= -->
-    <div v-if="activeTab === 'matches'" class="space-y-4">
+    <div v-if="activeTab === 'matches' && hasMealieConfigured" class="space-y-4">
       
       <div v-if="recipes.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div 
@@ -189,7 +213,7 @@
     <!-- ========================================================================= -->
     <!-- TAB 2: COOKED MEALS RECONCILIATION QUEUE                                  -->
     <!-- ========================================================================= -->
-    <div v-if="activeTab === 'pending'" class="space-y-5 animate-in fade-in duration-200">
+    <div v-if="activeTab === 'pending' && (hasMealieConfigured || pendingMeals.length > 0)" class="space-y-5 animate-in fade-in duration-200">
       
       <!-- Queue Header Toolbar -->
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
@@ -362,7 +386,7 @@
     <!-- ========================================================================= -->
     <!-- TAB 3: ZERO-WASTE CHEF GENERATOR                                          -->
     <!-- ========================================================================= -->
-    <div v-if="activeTab === 'generator'" class="space-y-6">
+    <div v-if="activeTab === 'generator' && hasLlmConfigured" class="space-y-6">
       
       <div class="bg-gradient-to-br from-brand-950/40 via-slate-900 to-slate-900 border border-brand-500/30 rounded-3xl p-6 shadow-xl space-y-4">
         <div>
@@ -444,7 +468,7 @@
 import { ref, onMounted } from 'vue';
 import { 
   ChefHat, UtensilsCrossed, Sparkles, Check, CheckCircle2, ShoppingCart, RefreshCw,
-  Clock, ArrowRight, X 
+  Clock, ArrowRight, X, Settings 
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
@@ -456,12 +480,39 @@ const isLoading = ref(false);
 const isGenerating = ref(false);
 const isReconciling = ref(false);
 
+const hasMealieConfigured = ref(false);
+const hasLlmConfigured = ref(false);
+
 const recipes = ref([]);
 const pendingMeals = ref([]);
 const pantryItems = ref([]);
 const generatedRecipe = ref(null);
 
+async function loadSettings() {
+  try {
+    const res = await api.getSettings();
+    const data = res.data || {};
+    hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
+    hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
+
+    // Choose default active tab based on what's configured
+    if (pendingMeals.value.length > 0) {
+      activeTab.value = 'pending';
+    } else if (hasMealieConfigured.value) {
+      activeTab.value = 'matches';
+    } else if (hasLlmConfigured.value) {
+      activeTab.value = 'generator';
+    }
+  } catch (err) {
+    console.error('Failed to load settings in RecipesView:', err);
+  }
+}
+
 async function loadRecipes() {
+  if (!hasMealieConfigured.value) {
+    recipes.value = [];
+    return;
+  }
   isLoading.value = true;
   try {
     const res = await api.getRecipeMatches();
@@ -499,7 +550,7 @@ async function loadPantryItems() {
 }
 
 function refreshCurrentTab() {
-  if (activeTab.value === 'matches') {
+  if (activeTab.value === 'matches' && hasMealieConfigured.value) {
     loadRecipes();
   } else if (activeTab.value === 'pending') {
     loadPendingMeals();
@@ -619,9 +670,10 @@ async function generateMeal() {
   try {
     const res = await api.generateZeroWasteMeal([]);
     generatedRecipe.value = res.data;
-    showToast('Generated zero-waste recipe!');
+    showToast('Chef generated a zero-waste recipe!');
   } catch (err) {
-    showToast('Failed to generate recipe: ' + err.message, 'error');
+    const errorMsg = err.response?.data?.message || err.response?.data?.error || err.message;
+    showToast('Failed to generate recipe: ' + errorMsg, 'error');
   } finally {
     isGenerating.value = false;
   }
@@ -636,9 +688,11 @@ async function addMissingToShopping(items) {
   }
 }
 
-onMounted(() => {
-  loadRecipes();
-  loadPendingMeals();
-  loadPantryItems();
+onMounted(async () => {
+  await Promise.all([loadPendingMeals(), loadPantryItems()]);
+  await loadSettings();
+  if (hasMealieConfigured.value) {
+    loadRecipes();
+  }
 });
 </script>

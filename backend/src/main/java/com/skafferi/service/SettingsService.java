@@ -156,12 +156,22 @@ public class SettingsService {
                 false,
                 false,
                 false,
+                "",
+                "openai",
+                "gpt-4o-mini",
+                "",
+                false,
+                false,
                 getAppVersion()
         );
     }
 
     public SettingsDto getSettings() {
         SettingsDto raw = getRawSettings();
+        boolean hasMealie = (raw.mealieBaseUrl() != null && !raw.mealieBaseUrl().isBlank() &&
+                             raw.mealieApiToken() != null && !raw.mealieApiToken().isBlank());
+        boolean hasLlm = (raw.llmApiKey() != null && !raw.llmApiKey().isBlank());
+
         return new SettingsDto(
                 raw.bringEmail(),
                 raw.bringPassword() != null && !raw.bringPassword().isBlank() ? "********" : "",
@@ -194,6 +204,12 @@ public class SettingsService {
                 raw.smtpEnabled() != null ? raw.smtpEnabled() : false,
                 raw.smtpDailyDigestEnabled() != null ? raw.smtpDailyDigestEnabled() : false,
                 raw.smtpWeeklyDigestEnabled() != null ? raw.smtpWeeklyDigestEnabled() : false,
+                raw.llmApiKey() != null && !raw.llmApiKey().isBlank() ? "********" : "",
+                raw.llmProvider() != null && !raw.llmProvider().isBlank() ? raw.llmProvider() : "openai",
+                raw.llmModel() != null && !raw.llmModel().isBlank() ? raw.llmModel() : "gpt-4o-mini",
+                raw.llmBaseUrl() != null ? raw.llmBaseUrl() : "",
+                hasLlm,
+                hasMealie,
                 getAppVersion()
         );
     }
@@ -210,11 +226,16 @@ public class SettingsService {
         String authentikSecret = (dto.authentikClientSecret() != null && dto.authentikClientSecret().equals("********")) ? current.authentikClientSecret() : dto.authentikClientSecret();
         String googleSecret = (dto.googleClientSecret() != null && dto.googleClientSecret().equals("********")) ? current.googleClientSecret() : dto.googleClientSecret();
         String smtpPass = (dto.smtpPassword() != null && dto.smtpPassword().equals("********")) ? current.smtpPassword() : dto.smtpPassword();
+        String llmKey = (dto.llmApiKey() != null && dto.llmApiKey().equals("********")) ? current.llmApiKey() : (dto.llmApiKey() != null ? dto.llmApiKey().trim() : "");
 
         int freshDays = dto.freshFoodReminderDays() != null ? dto.freshFoodReminderDays() : (current.freshFoodReminderDays() != null ? current.freshFoodReminderDays() : 5);
         boolean freshEnabled = dto.freshFoodReminderEnabled() != null ? dto.freshFoodReminderEnabled() : (current.freshFoodReminderEnabled() != null ? current.freshFoodReminderEnabled() : true);
         int expDays = dto.expirationReminderDays() != null ? dto.expirationReminderDays() : (current.expirationReminderDays() != null ? current.expirationReminderDays() : 3);
         boolean expEnabled = dto.expirationReminderEnabled() != null ? dto.expirationReminderEnabled() : (current.expirationReminderEnabled() != null ? current.expirationReminderEnabled() : true);
+
+        boolean hasMealie = (dto.mealieBaseUrl() != null && !dto.mealieBaseUrl().isBlank() &&
+                             mealieToken != null && !mealieToken.isBlank());
+        boolean hasLlm = (llmKey != null && !llmKey.isBlank());
 
         SettingsDto updated = new SettingsDto(
                 dto.bringEmail(),
@@ -248,6 +269,12 @@ public class SettingsService {
                 dto.smtpEnabled() != null ? dto.smtpEnabled() : false,
                 dto.smtpDailyDigestEnabled() != null ? dto.smtpDailyDigestEnabled() : false,
                 dto.smtpWeeklyDigestEnabled() != null ? dto.smtpWeeklyDigestEnabled() : false,
+                llmKey,
+                dto.llmProvider() != null && !dto.llmProvider().isBlank() ? dto.llmProvider() : "openai",
+                dto.llmModel() != null && !dto.llmModel().isBlank() ? dto.llmModel() : "gpt-4o-mini",
+                dto.llmBaseUrl() != null ? dto.llmBaseUrl().trim() : "",
+                hasLlm,
+                hasMealie,
                 getAppVersion()
         );
 
@@ -291,5 +318,35 @@ public class SettingsService {
     public boolean isMealieAutoDeduct() {
         Boolean auto = getRawSettings().mealieAutoDeduct();
         return auto != null && auto;
+    }
+
+    public boolean hasMealieConnection() {
+        SettingsDto raw = getRawSettings();
+        return raw.mealieBaseUrl() != null && !raw.mealieBaseUrl().isBlank() &&
+               raw.mealieApiToken() != null && !raw.mealieApiToken().isBlank();
+    }
+
+    public boolean hasLlmApiKey() {
+        SettingsDto raw = getRawSettings();
+        return raw.llmApiKey() != null && !raw.llmApiKey().isBlank();
+    }
+
+    public String getLlmApiKey() {
+        return getRawSettings().llmApiKey();
+    }
+
+    public String getLlmProvider() {
+        String p = getRawSettings().llmProvider();
+        return p != null && !p.isBlank() ? p : "openai";
+    }
+
+    public String getLlmModel() {
+        String m = getRawSettings().llmModel();
+        return m != null && !m.isBlank() ? m : "gpt-4o-mini";
+    }
+
+    public String getLlmBaseUrl() {
+        String u = getRawSettings().llmBaseUrl();
+        return u != null ? u.trim() : "";
     }
 }

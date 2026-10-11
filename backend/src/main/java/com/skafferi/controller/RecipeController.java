@@ -23,9 +23,15 @@ public class RecipeController {
     }
 
     @PostMapping("/ai-zero-waste")
-    public ResponseEntity<Map<String, Object>> generateZeroWaste(@RequestBody(required = false) Map<String, List<String>> request) {
-        List<String> itemIds = request != null ? request.get("itemIds") : null;
-        return ResponseEntity.ok(recipeService.generateZeroWasteMeal(itemIds));
+    public ResponseEntity<?> generateZeroWaste(@RequestBody(required = false) Map<String, List<String>> request) {
+        try {
+            List<String> itemIds = request != null ? request.get("itemIds") : null;
+            return ResponseEntity.ok(recipeService.generateZeroWasteMeal(itemIds));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
+        }
     }
 
     @PostMapping("/missing-to-shopping")

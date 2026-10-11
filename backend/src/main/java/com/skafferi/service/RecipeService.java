@@ -2,7 +2,6 @@ package com.skafferi.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.skafferi.domain.Item;
 import com.skafferi.dto.NotificationSummaryDto;
 import com.skafferi.dto.PantryItemSummaryDto;
 import com.skafferi.dto.SettingsDto;
@@ -41,6 +40,10 @@ public class RecipeService {
     }
 
     public List<Map<String, Object>> getMatchingRecipes() {
+        if (!settingsService.hasMealieConnection()) {
+            return Collections.emptyList();
+        }
+
         SettingsDto rawSettings = settingsService.getRawSettings();
         List<PantryItemSummaryDto> pantryItems = inventoryService.getAllPantrySummaries(null, null, null, null, null, null, "NAME");
 
@@ -122,6 +125,10 @@ public class RecipeService {
     }
 
     public Map<String, Object> generateZeroWasteMeal(List<String> selectedItemIds) {
+        if (!settingsService.hasLlmApiKey()) {
+            throw new IllegalStateException("LLM API key is not configured. Please add an API key in Settings > Integrations & APIs.");
+        }
+
         List<PantryItemSummaryDto> pantryItems = inventoryService.getAllPantrySummaries(null, null, null, null, null, null, "NAME");
 
         List<PantryItemSummaryDto> candidateItems;
@@ -133,15 +140,211 @@ public class RecipeService {
             NotificationSummaryDto notifs = inventoryService.getNotificationSummary();
             candidateItems = new ArrayList<>(notifs.expiringSoonItems());
             candidateItems.addAll(notifs.freshCheckItems());
+            candidateItems.addAll(notifs.expiredItems());
             if (candidateItems.isEmpty()) {
-                candidateItems = pantryItems.stream().limit(5).collect(Collectors.toList());
+                candidateItems = pantryItems.stream().filter(i -> !i.isOutOfStock()).limit(5).collect(Collectors.toList());
             }
         }
 
-        List<String> names = candidateItems.stream().map(PantryItemSummaryDto::name).collect(Collectors.toList());
+        List<String> expiringNames = candidateItems.stream().map(PantryItemSummaryDto::name).distinct().collect(Collectors.toList());
 
-        // Generate tailored dish suggestions
-        return buildTailoredZeroWasteSuggestion(names);
+        List<String> inStockStaples = pantryItems.stream()
+                .filter(i -> !i.isOutOfStock() && !expiringNames.contains(i.name()))
+                .map(PantryItemSummaryDto::name)
+                .limit(20)
+                .collect(Collectors.toList());
+
+        return callLlmForZeroWasteMeal(expiringNames, inStockStaples);
+    }
+
+    private Map<String, Object> callLlmForZeroWasteMeal(List<String> expiringNames, List<String> inStockStaples) {
+        String apiKey = settingsService.getLlmApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("LLM API key is not configured.");
+        }
+
+        String provider = settingsService.getLlmProvider();
+        String model = settingsService.getLlmModel();
+        String baseUrl = settingsService.getLlmBaseUrl();
+
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = resolveDefaultBaseUrl(provider);
+        }
+        if (model == null || model.isBlank()) {
+            model = resolveDefaultModel(provider);
+        }
+
+        String endpoint = baseUrl.replaceAll("/+$", "") + "/chat/completions";
+
+        String expiringListStr = expiringNames.isEmpty()
+                ? "Pantry staples & aging produce"
+                : String.join(", ", expiringNames);
+
+        String staplesListStr = inStockStaples.isEmpty()
+                ? "Standard kitchen staples, spices, cooking oil, salt, pepper"
+                : String.join(", ", inStockStaples);
+
+        String systemPrompt = """
+                You are a creative, professional Zero-Waste Chef. Your goal is to help home cooks rescue aging ingredients and produce delicious meals while preventing food waste.
+                Respond ONLY with a valid JSON object matching this schema:
+                {
+                  "title": "Creative Recipe Title",
+                  "description": "Short 1-2 sentence description highlighting the flavor and how it rescues expiring ingredients",
+                  "utilizedItems": ["List of items rescued from the expiring list"],
+                  "pantryItemsUsed": ["List of other in-stock pantry items used"],
+                  "missingIngredients": ["List of optional missing ingredients not in stock, if any"],
+                  "prepTime": "10 mins",
+                  "cookTime": "20 mins",
+                  "servings": 2,
+                  "difficulty": "Easy",
+                  "instructions": [
+                    "Step 1...",
+                    "Step 2...",
+                    "Step 3..."
+                  ],
+                  "chefTips": "A practical zero-waste tip, storage advice, or clever substitution"
+                }
+                """;
+
+        String userPrompt = String.format("""
+                Please generate 1 inspiring zero-waste recipe using my kitchen ingredients.
+
+                EXPIRING INGREDIENTS TO RESCUE (Priority):
+                %s
+
+                OTHER IN-STOCK PANTRY INGREDIENTS:
+                %s
+                """, expiringListStr, staplesListStr);
+
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userPrompt)
+                ),
+                "temperature", 0.7
+        );
+
+        try {
+            String responseJson = restClient.post()
+                    .uri(endpoint)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(responseJson);
+            JsonNode choices = root.get("choices");
+            if (choices != null && choices.isArray() && choices.size() > 0) {
+                JsonNode messageNode = choices.get(0).get("message");
+                if (messageNode != null && messageNode.has("content")) {
+                    String rawContent = messageNode.get("content").asText();
+                    return parseRecipeJson(rawContent, expiringNames);
+                }
+            }
+            throw new RuntimeException("Unexpected response structure from LLM endpoint.");
+        } catch (Exception e) {
+            log.error("LLM Zero-Waste generation failed: {}", e.getMessage(), e);
+            throw new RuntimeException("LLM recipe generation failed: " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseRecipeJson(String raw, List<String> fallbackExpiring) {
+        String clean = raw.trim();
+        if (clean.contains("```json")) {
+            clean = clean.substring(clean.indexOf("```json") + 7);
+            if (clean.contains("```")) {
+                clean = clean.substring(0, clean.indexOf("```"));
+            }
+        } else if (clean.contains("```")) {
+            clean = clean.substring(clean.indexOf("```") + 3);
+            if (clean.contains("```")) {
+                clean = clean.substring(0, clean.indexOf("```"));
+            }
+        }
+        clean = clean.trim();
+
+        try {
+            return objectMapper.readValue(clean, Map.class);
+        } catch (Exception e) {
+            log.warn("Failed to parse LLM JSON directly, fallback to wrapper: {}", e.getMessage());
+            return buildTailoredZeroWasteSuggestion(fallbackExpiring);
+        }
+    }
+
+    public Map<String, Object> testLlmConnection(String apiKey, String provider, String model, String baseUrl) {
+        String key = (apiKey != null && !apiKey.isBlank() && !apiKey.equals("********"))
+                ? apiKey.trim()
+                : settingsService.getLlmApiKey();
+
+        if (key == null || key.isBlank()) {
+            return Map.of("success", false, "error", "API Key is required.");
+        }
+
+        String p = (provider != null && !provider.isBlank()) ? provider : settingsService.getLlmProvider();
+        String m = (model != null && !model.isBlank()) ? model : settingsService.getLlmModel();
+        String u = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : settingsService.getLlmBaseUrl();
+
+        if (u == null || u.isBlank()) {
+            u = resolveDefaultBaseUrl(p);
+        }
+        if (m == null || m.isBlank()) {
+            m = resolveDefaultModel(p);
+        }
+
+        String endpoint = u.replaceAll("/+$", "") + "/chat/completions";
+
+        Map<String, Object> payload = Map.of(
+                "model", m,
+                "messages", List.of(
+                        Map.of("role", "user", "content", "Reply with: Hello from Skafferi Zero-Waste Chef!")
+                ),
+                "max_tokens", 30
+        );
+
+        try {
+            String responseJson = restClient.post()
+                    .uri(endpoint)
+                    .header("Authorization", "Bearer " + key)
+                    .header("Content-Type", "application/json")
+                    .body(payload)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(responseJson);
+            String reply = "OK";
+            if (root.has("choices") && root.get("choices").isArray() && root.get("choices").size() > 0) {
+                reply = root.get("choices").get(0).path("message").path("content").asText(reply);
+            }
+            return Map.of("success", true, "message", "Connected successfully to " + m + "! Reply: " + reply.trim());
+        } catch (Exception e) {
+            log.warn("LLM test connection failed: {}", e.getMessage());
+            return Map.of("success", false, "error", "Connection error: " + e.getMessage());
+        }
+    }
+
+    public static String resolveDefaultBaseUrl(String provider) {
+        if (provider == null) return "https://api.openai.com/v1";
+        return switch (provider.toLowerCase()) {
+            case "gemini" -> "https://generativelanguage.googleapis.com/v1beta/openai";
+            case "openrouter" -> "https://openrouter.ai/api/v1";
+            case "groq" -> "https://api.groq.com/openai/v1";
+            case "ollama" -> "http://host.docker.internal:11434/v1";
+            default -> "https://api.openai.com/v1";
+        };
+    }
+
+    public static String resolveDefaultModel(String provider) {
+        if (provider == null) return "gpt-4o-mini";
+        return switch (provider.toLowerCase()) {
+            case "gemini" -> "gemini-1.5-flash";
+            case "openrouter" -> "google/gemini-flash-1.5";
+            case "groq" -> "llama-3.1-8b-instant";
+            case "ollama" -> "llama3.2:latest";
+            default -> "gpt-4o-mini";
+        };
     }
 
     public Map<String, Object> addMissingToShoppingList(List<String> items) {
@@ -161,7 +364,7 @@ public class RecipeService {
         String url = settings.mealieBaseUrl();
         String token = settings.mealieApiToken();
 
-        if (url != null && !url.isBlank()) {
+        if (url != null && !url.isBlank() && token != null && !token.isBlank()) {
             try {
                 String fullUrl = url.replaceAll("/+$", "") + "/api/recipes";
                 String json = restClient.get()
@@ -214,58 +417,7 @@ public class RecipeService {
             }
         }
 
-        // Built-in starter zero-waste pantry recipes
-        return getPresetPantryRecipes();
-    }
-
-    private List<Map<String, Object>> getPresetPantryRecipes() {
-        return List.of(
-                Map.of(
-                        "id", "preset-frittata",
-                        "name", "Farmer's Skillet Frittata",
-                        "description", "A classic, forgiving egg dish designed to turn any leftover vegetables, cheese, or cooked meats into a gourmet meal.",
-                        "source", "Pantry Chef",
-                        "prepTime", "10 mins",
-                        "cookTime", "15 mins",
-                        "ingredients", List.of("Eggs", "Milk", "Cheese", "Onion", "Bell Pepper", "Spinach", "Butter")
-                ),
-                Map.of(
-                        "id", "preset-stirfry",
-                        "name", "Pantry-Rescue Stir Fry",
-                        "description", "High-heat wok or skillet toss that crisps up aging vegetables and pairs with rice or noodles.",
-                        "source", "Pantry Chef",
-                        "prepTime", "10 mins",
-                        "cookTime", "10 mins",
-                        "ingredients", List.of("Rice", "Soy Sauce", "Garlic", "Broccoli", "Carrots", "Chicken", "Sesame Oil")
-                ),
-                Map.of(
-                        "id", "preset-soup",
-                        "name", "Hearty Harvest Vegetable & Bean Soup",
-                        "description", "A comforting simmer that transforms aging root vegetables and canned beans into rich broth.",
-                        "source", "Pantry Chef",
-                        "prepTime", "15 mins",
-                        "cookTime", "30 mins",
-                        "ingredients", List.of("Canned Beans", "Carrots", "Celery", "Onion", "Garlic", "Olive Oil", "Canned Tomatoes")
-                ),
-                Map.of(
-                        "id", "preset-pasta",
-                        "name", "One-Pan Creamy Garlic Herb Pasta",
-                        "description", "Silky pasta that utilizes dairy staples and leftover herbs before they wilt.",
-                        "source", "Pantry Chef",
-                        "prepTime", "5 mins",
-                        "cookTime", "15 mins",
-                        "ingredients", List.of("Pasta", "Garlic", "Butter", "Parmesan", "Heavy Cream", "Black Pepper")
-                ),
-                Map.of(
-                        "id", "preset-grainbowl",
-                        "name", "Roasted Veggie & Grain Power Bowl",
-                        "description", "Caramelized sheet-pan vegetables served over seasoned quinoa or rice with vinaigrette.",
-                        "source", "Pantry Chef",
-                        "prepTime", "10 mins",
-                        "cookTime", "25 mins",
-                        "ingredients", List.of("Quinoa", "Sweet Potatoes", "Olive Oil", "Lemon", "Chickpeas", "Mixed Greens")
-                )
-        );
+        return Collections.emptyList();
     }
 
     private Map<String, Object> buildTailoredZeroWasteSuggestion(List<String> expiringIngredients) {
