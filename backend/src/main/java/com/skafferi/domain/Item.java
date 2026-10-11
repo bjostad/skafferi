@@ -1,6 +1,7 @@
 package com.skafferi.domain;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -41,6 +42,8 @@ public class Item {
 
     @Column(nullable = true)
     private Boolean perishable = false;
+
+    private LocalDate lastFreshCheckDate;
 
     private String packageSize;
 
@@ -188,6 +191,14 @@ public class Item {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public LocalDate getLastFreshCheckDate() {
+        return lastFreshCheckDate;
+    }
+
+    public void setLastFreshCheckDate(LocalDate lastFreshCheckDate) {
+        this.lastFreshCheckDate = lastFreshCheckDate;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -501,8 +501,17 @@ public class InventoryService {
                 daysInStorage = Math.max(0, days);
                 int reminderDays = settingsService != null ? settingsService.getFreshFoodReminderDays() : 5;
                 boolean reminderEnabled = settingsService != null ? settingsService.isFreshFoodReminderEnabled() : true;
-                if (reminderEnabled && days >= reminderDays && (status.equals("NO_EXPIRY") || status.equals("FRESH"))) {
-                    freshCheckNeeded = true;
+                if (reminderEnabled && (status.equals("NO_EXPIRY") || status.equals("FRESH"))) {
+                    if (item.getLastFreshCheckDate() != null && !item.getLastFreshCheckDate().isBefore(earliestAdded)) {
+                        // After an item is verified "Still Fresh", prompt again after 1 day
+                        long daysSinceLastCheck = ChronoUnit.DAYS.between(item.getLastFreshCheckDate(), LocalDate.now());
+                        if (daysSinceLastCheck >= 1) {
+                            freshCheckNeeded = true;
+                        }
+                    } else if (days >= reminderDays) {
+                        // Initial threshold reached
+                        freshCheckNeeded = true;
+                    }
                 }
             }
         }
@@ -556,13 +565,8 @@ public class InventoryService {
     public PantryItemSummaryDto resetFreshness(String itemId) {
         Item item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new NoSuchElementException("Item not found: " + itemId));
-        List<InventoryBatch> batches = batchRepository.findByItemIdOrderByExpirationDateAsc(item.getId());
-        for (InventoryBatch b : batches) {
-            if (b.getQuantity() > 0) {
-                b.setPurchasedDate(LocalDate.now());
-                batchRepository.save(b);
-            }
-        }
+        item.setLastFreshCheckDate(LocalDate.now());
+        itemRepository.save(item);
         return mapToSummary(item);
     }
 

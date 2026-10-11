@@ -202,7 +202,7 @@ async function handleAdjust({ itemId, delta }) {
 async function markStillFresh(item) {
   try {
     await api.resetFreshness(item.id);
-    showToast(`"${item.name}" marked as still fresh! Timer reset.`);
+    showToast(`"${item.name}" marked as still fresh! Will check again tomorrow.`);
     await fetchExpiring();
   } catch (err) {
     showToast('Failed to reset freshness timer: ' + err.message, 'error');
