@@ -918,11 +918,10 @@
                 v-model="settings.llmProvider"
                 @change="onLlmProviderChange"
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
-                <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
-                <option value="gemini">Google Gemini (Gemini 1.5 Flash)</option>
-                <option value="openrouter">OpenRouter (Multi-model)</option>
-                <option value="groq">Groq (Ultra-fast)</option>
-                <option value="ollama">Local Ollama (Self-hosted)</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="ollama">Local Ollama</option>
                 <option value="custom">Custom (OpenAI-compatible)</option>
               </select>
             </div>
@@ -942,7 +941,7 @@
               <label class="text-xs font-semibold text-slate-300 block mb-1">Model Name</label>
               <input 
                 v-model="settings.llmModel" 
-                placeholder="e.g. gpt-4o-mini, gemini-1.5-flash" 
+                placeholder="e.g. gemini-2.5-flash, gpt-4o-mini" 
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]" />
             </div>
 
@@ -957,7 +956,7 @@
 
           <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-750 text-[11px] text-slate-400 flex items-start gap-2">
             <span class="text-amber-400 font-bold">💡 Tip:</span>
-            <span>Works with OpenAI, Google Gemini, OpenRouter, Groq, or self-hosted Ollama (`http://host.docker.internal:11434/v1`). Once configured, the <strong>Zero-Waste Chef</strong> tab appears in the Recipes view.</span>
+            <span>Works with Google Gemini, OpenAI, OpenRouter, or self-hosted Ollama (<code>http://host.docker.internal:11434/v1</code>). Once configured, the <strong>Zero-Waste Chef</strong> tab appears in the Recipes view.</span>
           </div>
         </div>
 
@@ -1778,16 +1777,12 @@ async function deleteUser(u) {
 function onLlmProviderChange() {
   switch (settings.llmProvider) {
     case 'gemini':
-      settings.llmModel = 'gemini-1.5-flash';
+      settings.llmModel = 'gemini-2.5-flash';
       settings.llmBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
       break;
     case 'openrouter':
-      settings.llmModel = 'google/gemini-flash-1.5';
+      settings.llmModel = 'google/gemini-2.5-flash';
       settings.llmBaseUrl = 'https://openrouter.ai/api/v1';
-      break;
-    case 'groq':
-      settings.llmModel = 'llama-3.1-8b-instant';
-      settings.llmBaseUrl = 'https://api.groq.com/openai/v1';
       break;
     case 'ollama':
       settings.llmModel = 'llama3.2:latest';

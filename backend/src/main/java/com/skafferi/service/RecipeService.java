@@ -330,7 +330,6 @@ public class RecipeService {
         return switch (provider.toLowerCase()) {
             case "gemini" -> "https://generativelanguage.googleapis.com/v1beta/openai";
             case "openrouter" -> "https://openrouter.ai/api/v1";
-            case "groq" -> "https://api.groq.com/openai/v1";
             case "ollama" -> "http://host.docker.internal:11434/v1";
             default -> "https://api.openai.com/v1";
         };
@@ -339,9 +338,8 @@ public class RecipeService {
     public static String resolveDefaultModel(String provider) {
         if (provider == null) return "gpt-4o-mini";
         return switch (provider.toLowerCase()) {
-            case "gemini" -> "gemini-1.5-flash";
-            case "openrouter" -> "google/gemini-flash-1.5";
-            case "groq" -> "llama-3.1-8b-instant";
+            case "gemini" -> "gemini-2.5-flash";
+            case "openrouter" -> "google/gemini-2.5-flash";
             case "ollama" -> "llama3.2:latest";
             default -> "gpt-4o-mini";
         };
