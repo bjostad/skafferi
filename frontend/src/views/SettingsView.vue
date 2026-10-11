@@ -938,19 +938,24 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="text-xs font-semibold text-slate-300 block mb-1">Model Name</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-semibold text-slate-300">Model Name</label>
+                <span class="text-[10px] text-brand-300 font-medium">Defaults to latest version</span>
+              </div>
               <input 
                 v-model="settings.llmModel" 
-                placeholder="e.g. gemini-2.5-flash, gpt-4o-mini" 
+                :placeholder="defaultModelPlaceholder" 
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]" />
+              <p class="text-[10px] text-slate-500 mt-1">Leave blank to use the latest model, or enter a specific custom model.</p>
             </div>
 
             <div>
               <label class="text-xs font-semibold text-slate-300 block mb-1">API Base URL (Optional)</label>
               <input 
                 v-model="settings.llmBaseUrl" 
-                placeholder="https://api.openai.com/v1" 
+                :placeholder="defaultBaseUrlPlaceholder" 
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]" />
+              <p class="text-[10px] text-slate-500 mt-1">Defaults to the official provider endpoint if left blank.</p>
             </div>
           </div>
 
@@ -1544,10 +1549,30 @@ const settings = reactive({
   smtpWeeklyDigestEnabled: false,
   llmApiKey: '',
   llmProvider: 'openai',
-  llmModel: 'gpt-4o-mini',
+  llmModel: '',
   llmBaseUrl: '',
   hasLlmApiKey: false,
   hasMealieConnection: false,
+});
+
+const defaultModelPlaceholder = computed(() => {
+  switch (settings.llmProvider) {
+    case 'gemini': return 'Default: gemini-flash-latest (leave blank for latest)';
+    case 'openrouter': return 'Default: openrouter/auto (leave blank for latest)';
+    case 'ollama': return 'Default: latest (leave blank for latest)';
+    case 'openai':
+    default: return 'Default: chat-latest (leave blank for latest)';
+  }
+});
+
+const defaultBaseUrlPlaceholder = computed(() => {
+  switch (settings.llmProvider) {
+    case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta/openai';
+    case 'openrouter': return 'https://openrouter.ai/api/v1';
+    case 'ollama': return 'http://host.docker.internal:11434/v1';
+    case 'openai':
+    default: return 'https://api.openai.com/v1';
+  }
 });
 
 function formatShelfLifeDescription(days) {
@@ -1671,6 +1696,9 @@ async function loadSettings() {
   try {
     const res = await api.getSettings();
     Object.assign(settings, res.data);
+    if (['gpt-4o-mini', 'gemini-1.5-flash', 'gemini-2.5-flash', 'google/gemini-2.5-flash', 'llama3.2:latest'].includes(settings.llmModel)) {
+      settings.llmModel = '';
+    }
     if (settings.bringEmail) {
       fetchBringLists();
     }
@@ -1775,23 +1803,28 @@ async function deleteUser(u) {
 }
 
 function onLlmProviderChange() {
+  if (!settings.llmModel || ['gpt-4o-mini', 'gemini-1.5-flash', 'gemini-2.5-flash', 'google/gemini-2.5-flash', 'llama3.2:latest'].includes(settings.llmModel)) {
+    settings.llmModel = '';
+  }
+
   switch (settings.llmProvider) {
     case 'gemini':
-      settings.llmModel = 'gemini-2.5-flash';
       settings.llmBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/openai';
       break;
     case 'openrouter':
-      settings.llmModel = 'google/gemini-2.5-flash';
       settings.llmBaseUrl = 'https://openrouter.ai/api/v1';
       break;
     case 'ollama':
-      settings.llmModel = 'llama3.2:latest';
       settings.llmBaseUrl = 'http://host.docker.internal:11434/v1';
       break;
     case 'openai':
-    default:
-      settings.llmModel = 'gpt-4o-mini';
       settings.llmBaseUrl = 'https://api.openai.com/v1';
+      break;
+    case 'custom':
+    default:
+      if (!settings.llmBaseUrl) {
+        settings.llmBaseUrl = 'https://api.openai.com/v1';
+      }
       break;
   }
 }

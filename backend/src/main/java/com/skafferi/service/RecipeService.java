@@ -284,14 +284,18 @@ public class RecipeService {
         }
 
         String p = (provider != null && !provider.isBlank()) ? provider : settingsService.getLlmProvider();
-        String m = (model != null && !model.isBlank()) ? model : settingsService.getLlmModel();
-        String u = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl : settingsService.getLlmBaseUrl();
+        String m = (model != null && !model.isBlank()) ? model.trim() : null;
+        if (m == null || m.isBlank()
+                || "gpt-4o-mini".equalsIgnoreCase(m)
+                || "gemini-1.5-flash".equalsIgnoreCase(m)
+                || "gemini-2.5-flash".equalsIgnoreCase(m)
+                || "google/gemini-2.5-flash".equalsIgnoreCase(m)) {
+            m = resolveDefaultModel(p);
+        }
 
+        String u = (baseUrl != null && !baseUrl.isBlank()) ? baseUrl.trim() : null;
         if (u == null || u.isBlank()) {
             u = resolveDefaultBaseUrl(p);
-        }
-        if (m == null || m.isBlank()) {
-            m = resolveDefaultModel(p);
         }
 
         String endpoint = u.replaceAll("/+$", "") + "/chat/completions";
@@ -336,12 +340,12 @@ public class RecipeService {
     }
 
     public static String resolveDefaultModel(String provider) {
-        if (provider == null) return "gpt-4o-mini";
+        if (provider == null) return "chat-latest";
         return switch (provider.toLowerCase()) {
-            case "gemini" -> "gemini-2.5-flash";
-            case "openrouter" -> "google/gemini-2.5-flash";
-            case "ollama" -> "llama3.2:latest";
-            default -> "gpt-4o-mini";
+            case "gemini" -> "gemini-flash-latest";
+            case "openrouter" -> "openrouter/auto";
+            case "ollama" -> "latest";
+            default -> "chat-latest";
         };
     }
 

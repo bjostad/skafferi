@@ -158,7 +158,7 @@ public class SettingsService {
                 false,
                 "",
                 "openai",
-                "gpt-4o-mini",
+                "",
                 "",
                 false,
                 false,
@@ -206,7 +206,11 @@ public class SettingsService {
                 raw.smtpWeeklyDigestEnabled() != null ? raw.smtpWeeklyDigestEnabled() : false,
                 raw.llmApiKey() != null && !raw.llmApiKey().isBlank() ? "********" : "",
                 raw.llmProvider() != null && !raw.llmProvider().isBlank() ? raw.llmProvider() : "openai",
-                raw.llmModel() != null && !raw.llmModel().isBlank() ? raw.llmModel() : "gpt-4o-mini",
+                (raw.llmModel() != null 
+                        && !"gpt-4o-mini".equalsIgnoreCase(raw.llmModel().trim())
+                        && !"gemini-1.5-flash".equalsIgnoreCase(raw.llmModel().trim())
+                        && !"gemini-2.5-flash".equalsIgnoreCase(raw.llmModel().trim())
+                        && !"google/gemini-2.5-flash".equalsIgnoreCase(raw.llmModel().trim())) ? raw.llmModel().trim() : "",
                 raw.llmBaseUrl() != null ? raw.llmBaseUrl() : "",
                 hasLlm,
                 hasMealie,
@@ -271,7 +275,7 @@ public class SettingsService {
                 dto.smtpWeeklyDigestEnabled() != null ? dto.smtpWeeklyDigestEnabled() : false,
                 llmKey,
                 dto.llmProvider() != null && !dto.llmProvider().isBlank() ? dto.llmProvider() : "openai",
-                dto.llmModel() != null && !dto.llmModel().isBlank() ? dto.llmModel() : "gpt-4o-mini",
+                dto.llmModel() != null ? dto.llmModel().trim() : "",
                 dto.llmBaseUrl() != null ? dto.llmBaseUrl().trim() : "",
                 hasLlm,
                 hasMealie,
@@ -342,7 +346,14 @@ public class SettingsService {
 
     public String getLlmModel() {
         String m = getRawSettings().llmModel();
-        return m != null && !m.isBlank() ? m : "gpt-4o-mini";
+        if (m != null && !m.isBlank()
+                && !"gpt-4o-mini".equalsIgnoreCase(m.trim())
+                && !"gemini-1.5-flash".equalsIgnoreCase(m.trim())
+                && !"gemini-2.5-flash".equalsIgnoreCase(m.trim())
+                && !"google/gemini-2.5-flash".equalsIgnoreCase(m.trim())) {
+            return m.trim();
+        }
+        return RecipeService.resolveDefaultModel(getLlmProvider());
     }
 
     public String getLlmBaseUrl() {
