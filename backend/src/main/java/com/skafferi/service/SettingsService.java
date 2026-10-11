@@ -68,7 +68,7 @@ public class SettingsService {
     @Value("${skafferi.auth.google.client-secret:}")
     private String defaultGoogleClientSecret;
 
-    @Value("${skafferi.version:0.5.3-beta}")
+    @Value("${skafferi.version:0.6.0-beta}")
     private String configuredVersion;
 
     private final org.springframework.boot.info.BuildProperties buildProperties;
@@ -112,7 +112,7 @@ public class SettingsService {
         return file;
     }
 
-    private SettingsDto getRawSettings() {
+    public SettingsDto getRawSettings() {
         File file = getSettingsFile();
         if (file.exists()) {
             try {
@@ -142,6 +142,16 @@ public class SettingsService {
                 true,
                 3,
                 true,
+                "",
+                587,
+                "",
+                "",
+                "TLS",
+                "",
+                "",
+                false,
+                false,
+                false,
                 getAppVersion()
         );
     }
@@ -169,6 +179,16 @@ public class SettingsService {
                 raw.freshFoodReminderEnabled() != null ? raw.freshFoodReminderEnabled() : true,
                 raw.expirationReminderDays() != null ? raw.expirationReminderDays() : 3,
                 raw.expirationReminderEnabled() != null ? raw.expirationReminderEnabled() : true,
+                raw.smtpHost() != null ? raw.smtpHost() : "",
+                raw.smtpPort() != null ? raw.smtpPort() : 587,
+                raw.smtpUsername() != null ? raw.smtpUsername() : "",
+                raw.smtpPassword() != null && !raw.smtpPassword().isBlank() ? "********" : "",
+                raw.smtpEncryption() != null ? raw.smtpEncryption() : "TLS",
+                raw.smtpFromAddress() != null ? raw.smtpFromAddress() : "",
+                raw.smtpRecipients() != null ? raw.smtpRecipients() : "",
+                raw.smtpEnabled() != null ? raw.smtpEnabled() : false,
+                raw.smtpDailyDigestEnabled() != null ? raw.smtpDailyDigestEnabled() : false,
+                raw.smtpWeeklyDigestEnabled() != null ? raw.smtpWeeklyDigestEnabled() : false,
                 getAppVersion()
         );
     }
@@ -184,6 +204,7 @@ public class SettingsService {
         String krogerSecret = (dto.krogerClientSecret() != null && dto.krogerClientSecret().equals("********")) ? current.krogerClientSecret() : dto.krogerClientSecret();
         String authentikSecret = (dto.authentikClientSecret() != null && dto.authentikClientSecret().equals("********")) ? current.authentikClientSecret() : dto.authentikClientSecret();
         String googleSecret = (dto.googleClientSecret() != null && dto.googleClientSecret().equals("********")) ? current.googleClientSecret() : dto.googleClientSecret();
+        String smtpPass = (dto.smtpPassword() != null && dto.smtpPassword().equals("********")) ? current.smtpPassword() : dto.smtpPassword();
 
         int freshDays = dto.freshFoodReminderDays() != null ? dto.freshFoodReminderDays() : (current.freshFoodReminderDays() != null ? current.freshFoodReminderDays() : 5);
         boolean freshEnabled = dto.freshFoodReminderEnabled() != null ? dto.freshFoodReminderEnabled() : (current.freshFoodReminderEnabled() != null ? current.freshFoodReminderEnabled() : true);
@@ -211,6 +232,16 @@ public class SettingsService {
                 freshEnabled,
                 expDays,
                 expEnabled,
+                dto.smtpHost() != null ? dto.smtpHost().trim() : "",
+                dto.smtpPort() != null ? dto.smtpPort() : 587,
+                dto.smtpUsername() != null ? dto.smtpUsername().trim() : "",
+                smtpPass,
+                dto.smtpEncryption() != null ? dto.smtpEncryption() : "TLS",
+                dto.smtpFromAddress() != null ? dto.smtpFromAddress().trim() : "",
+                dto.smtpRecipients() != null ? dto.smtpRecipients().trim() : "",
+                dto.smtpEnabled() != null ? dto.smtpEnabled() : false,
+                dto.smtpDailyDigestEnabled() != null ? dto.smtpDailyDigestEnabled() : false,
+                dto.smtpWeeklyDigestEnabled() != null ? dto.smtpWeeklyDigestEnabled() : false,
                 getAppVersion()
         );
 

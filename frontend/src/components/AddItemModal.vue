@@ -155,11 +155,24 @@
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
           </div>
           <div>
-            <label class="text-xs font-semibold text-slate-300 block mb-1">Expiration Date (Optional)</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-semibold text-slate-300">Expiration Date (Optional)</label>
+              <span v-if="selectedCategoryShelfLife" class="text-[10px] text-brand-400 font-mono">
+                Preset: +{{ selectedCategoryShelfLife }}d
+              </span>
+            </div>
             <input 
               type="date" 
               v-model="form.expirationDate" 
+              @input="isExpirationManuallyEdited = true"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <button type="button" @click="adjustExpiration(-2)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">-2d</button>
+              <button type="button" @click="adjustExpiration(2)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+2d</button>
+              <button type="button" @click="adjustExpiration(7)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+1w</button>
+              <button type="button" @click="adjustExpiration(30)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+1m</button>
+              <button v-if="form.expirationDate" type="button" @click="clearExpiration" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] text-rose-400 hover:text-rose-300 transition-colors">Clear</button>
+            </div>
           </div>
         </div>
 
@@ -363,12 +376,48 @@ async function addStockToExisting(item) {
   }
 }
 
+const isExpirationManuallyEdited = ref(Boolean(props.initialData?.expirationDate));
+
+const selectedCategoryShelfLife = computed(() => {
+  const cat = categories.value.find(c => c.id === form.categoryId);
+  return cat?.defaultShelfLifeDays || null;
+});
+
+function addDaysToDate(baseDateStr, days) {
+  const base = baseDateStr ? new Date(baseDateStr + 'T00:00:00') : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().substring(0, 10);
+}
+
+function adjustExpiration(days) {
+  isExpirationManuallyEdited.value = true;
+  const current = form.expirationDate || new Date().toISOString().substring(0, 10);
+  form.expirationDate = addDaysToDate(current, days);
+}
+
+function clearExpiration() {
+  isExpirationManuallyEdited.value = true;
+  form.expirationDate = '';
+}
+
+function applyDefaultShelfLife() {
+  if (isEditingExisting.value || isExpirationManuallyEdited.value) return;
+  const shelfDays = selectedCategoryShelfLife.value;
+  if (shelfDays && shelfDays > 0) {
+    const baseDate = form.purchasedDate || new Date().toISOString().substring(0, 10);
+    form.expirationDate = addDaysToDate(baseDate, shelfDays);
+  }
+}
+
 function handleCategoryChange() {
   if (form.categoryId === 'cat-produce') {
     form.perishable = true;
     if (form.defaultLocationId === 'loc-pantry') {
       form.defaultLocationId = 'loc-fridge';
     }
+  }
+  if (!isExpirationManuallyEdited.value && !isEditingExisting.value) {
+    applyDefaultShelfLife();
   }
 }
 
@@ -382,6 +431,7 @@ onMounted(async () => {
     categories.value = cRes.data;
     locations.value = lRes.data;
     existingItems.value = itemsRes.data || [];
+    applyDefaultShelfLife();
   } catch (err) {
     console.error('Failed to load categories/locations/items:', err);
   }

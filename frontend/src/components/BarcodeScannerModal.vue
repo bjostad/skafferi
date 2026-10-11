@@ -16,13 +16,40 @@
       <!-- Modal Body (scrollable if viewport is small) -->
       <div class="overflow-y-auto flex-1 p-3.5 sm:p-4 space-y-4">
 
+        <!-- Rapid Grocery Unpack Mode Switch -->
+        <div class="p-3 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <Zap class="w-4 h-4" />
+            </div>
+            <div>
+              <span class="text-xs font-bold text-white block">Rapid Grocery Unpack Mode</span>
+              <span class="text-[10px] text-slate-400 block">Non-stop scanning; recognized pantry staples auto-increment (+1) with audio chime.</span>
+            </div>
+          </div>
+          <input 
+            type="checkbox" 
+            v-model="isRapidMode" 
+            class="w-4 h-4 rounded text-brand-600 bg-slate-800 border-slate-700 focus:ring-brand-500" />
+        </div>
+
         <!-- Camera Scanner Viewfinder -->
         <div class="flex flex-col items-center">
           <div class="relative w-full max-w-sm rounded-xl overflow-hidden bg-black border-2 border-dashed border-brand-500/60 min-h-[220px] max-h-[260px] flex items-center justify-center">
             <div id="barcode-reader" class="w-full h-full"></div>
+
+            <!-- Rapid Mode Active Floating Alert -->
+            <div 
+              v-if="isRapidMode && recentScanAlert" 
+              class="absolute top-3 left-3 right-3 p-2.5 rounded-xl backdrop-blur-md shadow-lg flex items-center gap-2 z-20 animate-in fade-in slide-in-from-top-2 duration-150"
+              :class="recentScanAlert.success ? 'bg-emerald-950/90 border border-emerald-500/40 text-emerald-200' : 'bg-amber-950/90 border border-amber-500/40 text-amber-200'">
+              <Check v-if="recentScanAlert.success" class="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              <AlertCircle v-else class="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span class="text-xs font-bold truncate">{{ recentScanAlert.text }}</span>
+            </div>
             
-            <!-- Scan Overlay Badge when detected and locked -->
-            <div v-if="isLocked" class="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-10">
+            <!-- Scan Overlay Badge when detected and locked (Standard mode only) -->
+            <div v-if="!isRapidMode && isLocked" class="absolute inset-0 bg-slate-950/70 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center z-10">
               <div class="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2 border border-emerald-500/30">
                 <Check class="w-6 h-6" />
               </div>
@@ -46,7 +73,44 @@
               <p class="text-[11px] text-slate-300 max-w-xs leading-normal">{{ cameraError }}</p>
             </div>
           </div>
-          <p class="text-xs text-slate-400 mt-2 text-center">Point your camera at a grocery barcode (UPC / EAN)</p>
+          <p class="text-xs text-slate-400 mt-2 text-center">
+            {{ isRapidMode ? 'Keep scanning items from your bags continuously' : 'Point your camera at a grocery barcode (UPC / EAN)' }}
+          </p>
+        </div>
+
+        <!-- Rapid Mode Session Unpack Tray -->
+        <div v-if="isRapidMode" class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-white flex items-center gap-1.5">
+              <Package class="w-4 h-4 text-brand-400" />
+              <span>Unpack Session: {{ unpackedList.length }} incremented</span>
+            </span>
+            <span v-if="unassignedList.length > 0" class="font-bold text-amber-400 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[11px]">
+              {{ unassignedList.length }} unassigned
+            </span>
+          </div>
+
+          <!-- Unassigned Items Queue -->
+          <div v-if="unassignedList.length > 0" class="space-y-1.5 pt-1 border-t border-slate-800">
+            <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Needs Name / Category</span>
+            <div class="space-y-1.5 max-h-36 overflow-y-auto">
+              <div 
+                v-for="(item, idx) in unassignedList" 
+                :key="idx"
+                class="flex items-center justify-between p-2 rounded-xl bg-slate-900 border border-slate-700 text-xs">
+                <div class="min-w-0 pr-2">
+                  <span class="font-semibold text-white block truncate">{{ item.name || 'Unknown Product' }}</span>
+                  <span class="font-mono text-[10px] text-slate-400">{{ item.barcode }}</span>
+                </div>
+                <button 
+                  type="button" 
+                  @click="assignDetails(item)"
+                  class="px-2.5 py-1 rounded-lg bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-[11px] flex-shrink-0 transition-colors">
+                  Assign
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Manual Barcode Input Fallback -->
@@ -167,7 +231,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Html5Qrcode } from 'html5-qrcode';
-import { ScanBarcode, X, Package, Plus, Check, RefreshCw, Loader2, AlertCircle } from 'lucide-vue-next';
+import { ScanBarcode, X, Package, Plus, Check, RefreshCw, Loader2, AlertCircle, Zap } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
 
@@ -184,6 +248,49 @@ const isLookingUp = ref(false);
 const cameraError = ref('');
 const lastScannedCode = ref('');
 const addQuantity = ref(1);
+
+const isRapidMode = ref(false);
+const unpackedList = ref([]);
+const unassignedList = ref([]);
+const recentScanAlert = ref(null);
+const recentScanTimestamps = new Map();
+
+function playSuccessChime() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    osc.frequency.setValueAtTime(880.00, audioCtx.currentTime + 0.08); // A5
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {
+    // AudioContext blocked or unsupported
+  }
+}
+
+function playUnknownAlertChime() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(329.63, audioCtx.currentTime); // E4
+    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.3);
+  } catch (e) {
+    // ignore
+  }
+}
 
 onMounted(async () => {
   await initScanner();
@@ -250,8 +357,47 @@ async function stopScanner() {
 }
 
 async function onBarcodeDetected(code) {
-  if (!code || isLocked.value || isLookingUp.value) return;
+  if (!code) return;
   const cleanCode = code.trim();
+
+  // Rapid Mode Continuous Scan Loop
+  if (isRapidMode.value) {
+    const now = Date.now();
+    const lastScanTime = recentScanTimestamps.get(cleanCode) || 0;
+    if (now - lastScanTime < 1800) {
+      return; // prevent rapid duplicate firing within 1.8s
+    }
+    recentScanTimestamps.set(cleanCode, now);
+
+    try {
+      const res = await api.lookupBarcode(cleanCode);
+      const data = res.data;
+      if (data?.existingItemId) {
+        await api.adjustQuantity(data.existingItemId, 1);
+        playSuccessChime();
+        unpackedList.value.unshift({ name: data.name, barcode: cleanCode, time: new Date() });
+        recentScanAlert.value = { success: true, text: `+1 ${data.name}` };
+        emit('item-updated');
+      } else {
+        playUnknownAlertChime();
+        if (!unassignedList.value.some(u => u.barcode === cleanCode)) {
+          unassignedList.value.push(data || { barcode: cleanCode, name: 'Unknown Product' });
+        }
+        recentScanAlert.value = { success: false, text: `Queued: ${data?.name || cleanCode}` };
+      }
+      setTimeout(() => {
+        if (recentScanAlert.value?.text.includes(data?.name || cleanCode)) {
+          recentScanAlert.value = null;
+        }
+      }, 2500);
+    } catch (err) {
+      console.warn('Rapid lookup error:', err);
+    }
+    return;
+  }
+
+  // Standard Scanning Mode
+  if (isLocked.value || isLookingUp.value) return;
   if (cleanCode === lastScannedCode.value && lookupResult.value) {
     return;
   }
@@ -336,6 +482,11 @@ async function quickAddExistingStock() {
   } catch (err) {
     showToast('Failed to add stock: ' + err.message, 'error');
   }
+}
+
+function assignDetails(item) {
+  emit('found-item', item);
+  closeModal();
 }
 
 function closeModal() {

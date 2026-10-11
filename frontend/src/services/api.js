@@ -73,6 +73,9 @@ export default {
   saveCategory(category) {
     return api.post('/categories', category);
   },
+  updateCategory(id, category) {
+    return api.put(`/categories/${id}`, category);
+  },
 
   // Users & Auth
   getUsers() {
@@ -138,5 +141,44 @@ export default {
   },
   getVersion() {
     return api.get('/settings/version');
+  },
+  testEmail() {
+    return api.post('/settings/test-email');
+  },
+  sendDigest(type = 'daily') {
+    return api.post('/settings/send-digest', null, { params: { type } });
+  },
+
+  // Analytics
+  getSpendSummary() {
+    return api.get('/analytics/summary');
+  },
+  getMonthlySpend() {
+    return api.get('/analytics/spend');
+  },
+  getStoreComparison() {
+    return api.get('/analytics/stores');
+  },
+  getPriceHistory(params = {}) {
+    return api.get('/analytics/prices', { params });
+  },
+
+  // Predictions & Replenishment
+  getDepletionPredictions() {
+    return api.get('/inventory/predictions');
+  },
+  getSeasonalSuggestions() {
+    return api.get('/inventory/seasonal-suggestions');
+  },
+
+  // Recipes & Meal Planning
+  getRecipeMatches() {
+    return api.get('/recipes/matches');
+  },
+  generateZeroWasteMeal(itemIds = []) {
+    return api.post('/recipes/ai-zero-waste', { itemIds });
+  },
+  addMissingToShoppingList(items = []) {
+    return api.post('/recipes/missing-to-shopping', { items });
   },
 };

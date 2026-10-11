@@ -33,6 +33,18 @@ public record SettingsDto(
         Integer expirationReminderDays,
         Boolean expirationReminderEnabled,
 
+        // SMTP Email Notifications
+        String smtpHost,
+        Integer smtpPort,
+        String smtpUsername,
+        String smtpPassword,
+        String smtpEncryption,
+        String smtpFromAddress,
+        String smtpRecipients,
+        Boolean smtpEnabled,
+        Boolean smtpDailyDigestEnabled,
+        Boolean smtpWeeklyDigestEnabled,
+
         // Application Metadata
         String appVersion
 ) {}

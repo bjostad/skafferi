@@ -27,4 +27,15 @@ public class CategoryController {
         Category saved = categoryRepository.save(category);
         return ResponseEntity.ok(saved);
     }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Category> updateCategory(@PathVariable String id, @RequestBody Category category) {
+        return categoryRepository.findById(id).map(existing -> {
+            if (category.getName() != null) existing.setName(category.getName());
+            if (category.getIcon() != null) existing.setIcon(category.getIcon());
+            existing.setSortOrder(category.getSortOrder());
+            existing.setDefaultShelfLifeDays(category.getDefaultShelfLifeDays());
+            return ResponseEntity.ok(categoryRepository.save(existing));
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }

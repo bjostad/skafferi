@@ -62,18 +62,42 @@ public class DataInitializer {
             if (categoryRepository.count() == 0) {
                 log.info("Seeding initial food categories...");
                 categoryRepository.saveAll(List.of(
-                        new Category("cat-produce", "Produce", "Apple", 1),
-                        new Category("cat-dairy", "Dairy & Eggs", "Milk", 2),
-                        new Category("cat-meat", "Meat & Seafood", "Beef", 3),
-                        new Category("cat-bakery", "Bakery", "Croissant", 4),
-                        new Category("cat-canned", "Canned & Jarred", "Package", 5),
-                        new Category("cat-grains", "Dry Goods & Grains", "Wheat", 6),
-                        new Category("cat-spices", "Spices & Seasonings", "Sparkles", 7),
-                        new Category("cat-beverages", "Beverages", "CupSoda", 8),
-                        new Category("cat-snacks", "Snacks", "Cookie", 9),
-                        new Category("cat-frozen", "Frozen Foods", "IceCream", 10),
-                        new Category("cat-household", "Household & Cleaning", "Home", 11)
+                        new Category("cat-produce", "Produce", "Apple", 1, 7),
+                        new Category("cat-dairy", "Dairy & Eggs", "Milk", 2, 14),
+                        new Category("cat-meat", "Meat & Seafood", "Beef", 3, 5),
+                        new Category("cat-bakery", "Bakery", "Croissant", 4, 7),
+                        new Category("cat-canned", "Canned & Jarred", "Package", 5, 730),
+                        new Category("cat-grains", "Dry Goods & Grains", "Wheat", 6, 365),
+                        new Category("cat-spices", "Spices & Seasonings", "Sparkles", 7, 730),
+                        new Category("cat-beverages", "Beverages", "CupSoda", 8, 180),
+                        new Category("cat-snacks", "Snacks", "Cookie", 9, 90),
+                        new Category("cat-frozen", "Frozen Foods", "IceCream", 10, 180),
+                        new Category("cat-household", "Household & Cleaning", "Home", 11, null)
                 ));
+            } else {
+                // Backfill defaultShelfLifeDays if null on existing categories
+                List<Category> existingCats = categoryRepository.findAll();
+                for (Category cat : existingCats) {
+                    if (cat.getDefaultShelfLifeDays() == null) {
+                        Integer days = switch (cat.getId()) {
+                            case "cat-produce" -> 7;
+                            case "cat-dairy" -> 14;
+                            case "cat-meat" -> 5;
+                            case "cat-bakery" -> 7;
+                            case "cat-canned" -> 730;
+                            case "cat-grains" -> 365;
+                            case "cat-spices" -> 730;
+                            case "cat-beverages" -> 180;
+                            case "cat-snacks" -> 90;
+                            case "cat-frozen" -> 180;
+                            default -> null;
+                        };
+                        if (days != null) {
+                            cat.setDefaultShelfLifeDays(days);
+                            categoryRepository.save(cat);
+                        }
+                    }
+                }
             }
         };
     }

@@ -19,14 +19,21 @@ public class Category {
 
     private int sortOrder;
 
+    private Integer defaultShelfLifeDays;
+
     public Category() {
     }
 
     public Category(String id, String name, String icon, int sortOrder) {
+        this(id, name, icon, sortOrder, null);
+    }
+
+    public Category(String id, String name, String icon, int sortOrder, Integer defaultShelfLifeDays) {
         this.id = id;
         this.name = name;
         this.icon = icon;
         this.sortOrder = sortOrder;
+        this.defaultShelfLifeDays = defaultShelfLifeDays;
     }
 
     public String getId() {
@@ -59,5 +66,13 @@ public class Category {
 
     public void setSortOrder(int sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Integer getDefaultShelfLifeDays() {
+        return defaultShelfLifeDays;
+    }
+
+    public void setDefaultShelfLifeDays(Integer defaultShelfLifeDays) {
+        this.defaultShelfLifeDays = defaultShelfLifeDays;
     }
 }

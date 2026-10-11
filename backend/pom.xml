@@ -12,7 +12,7 @@
 
     <groupId>com.skafferi</groupId>
     <artifactId>skafferi-backend</artifactId>
-    <version>0.5.3-beta</version>
+    <version>0.6.0-beta</version>
     <name>Skafferi</name>
     <description>Self-Hosted Pantry &amp; Inventory Management Application</description>
 
@@ -34,6 +34,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
         <!-- SQLite Driver and Hibernate Community Dialect -->

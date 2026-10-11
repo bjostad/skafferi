@@ -66,6 +66,22 @@
           <ShoppingCart class="w-4 h-4" />
           Shopping List
         </router-link>
+
+        <router-link 
+          to="/recipes" 
+          class="px-3.5 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
+          :class="$route.path === '/recipes' ? 'bg-brand-500/25 text-brand-200 border border-brand-400/50 font-bold shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'">
+          <ChefHat class="w-4 h-4" />
+          Recipes
+        </router-link>
+
+        <router-link 
+          to="/analytics" 
+          class="px-3.5 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
+          :class="$route.path === '/analytics' ? 'bg-brand-500/25 text-brand-200 border border-brand-400/50 font-bold shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'">
+          <BarChart3 class="w-4 h-4" />
+          Analytics
+        </router-link>
       </div>
 
       <!-- Quick Action Buttons & User Menu -->
@@ -347,20 +363,28 @@
     </div>
 
     <!-- Mobile Navigation Sub-bar -->
-    <div class="flex md:hidden items-center justify-around gap-1 mt-2.5 pt-2 border-t border-slate-800 text-xs">
-      <router-link to="/" class="flex flex-col items-center gap-1 py-1 px-3 rounded-lg" :class="$route.path === '/' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+    <div class="flex md:hidden items-center justify-around gap-1 mt-2.5 pt-2 border-t border-slate-800 text-[11px] overflow-x-auto scrollbar-none">
+      <router-link to="/" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <Boxes class="w-4 h-4" />
         Inventory
       </router-link>
-      <router-link to="/expiring" class="flex flex-col items-center gap-1 py-1 px-3 rounded-lg" :class="$route.path === '/expiring' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+      <router-link to="/expiring" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/expiring' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <Clock class="w-4 h-4" />
         Expiring
       </router-link>
-      <router-link to="/shopping" class="flex flex-col items-center gap-1 py-1 px-3 rounded-lg" :class="$route.path === '/shopping' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+      <router-link to="/recipes" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/recipes' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+        <ChefHat class="w-4 h-4" />
+        Recipes
+      </router-link>
+      <router-link to="/shopping" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/shopping' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <ShoppingCart class="w-4 h-4" />
         Shopping
       </router-link>
-      <router-link to="/settings" class="flex flex-col items-center gap-1 py-1 px-3 rounded-lg" :class="$route.path === '/settings' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+      <router-link to="/analytics" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/analytics' ? 'text-brand-400 font-bold' : 'text-slate-400'">
+        <BarChart3 class="w-4 h-4" />
+        Analytics
+      </router-link>
+      <router-link to="/settings" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/settings' ? 'text-brand-400 font-bold' : 'text-slate-400'">
         <Settings class="w-4 h-4" />
         Settings
       </router-link>
@@ -374,7 +398,7 @@ import { useRouter } from 'vue-router';
 import { 
   Package, Boxes, Clock, ShoppingCart, Settings, ScanBarcode, Receipt, Plus, 
   ChevronDown, MapPin, Link2, Users, Check, ShieldCheck,
-  Bell, AlertTriangle, Sparkles, CheckCircle2 
+  Bell, AlertTriangle, Sparkles, CheckCircle2, ChefHat, BarChart3 
 } from 'lucide-vue-next';
 import { auth } from '../services/auth';
 import api from '../services/api';

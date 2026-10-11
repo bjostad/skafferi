@@ -45,11 +45,23 @@
         </div>
 
         <div>
-          <label class="text-xs font-semibold text-slate-300 block mb-1">Expiration Date</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-xs font-semibold text-slate-300">Expiration Date</label>
+            <span v-if="item.category?.defaultShelfLifeDays" class="text-[10px] text-brand-400 font-mono">
+              Preset: +{{ item.category.defaultShelfLifeDays }}d
+            </span>
+          </div>
           <input 
             type="date" 
             v-model="form.expirationDate" 
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500" />
+          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <button type="button" @click="adjustExpiration(-2)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">-2d</button>
+            <button type="button" @click="adjustExpiration(2)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+2d</button>
+            <button type="button" @click="adjustExpiration(7)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+1w</button>
+            <button type="button" @click="adjustExpiration(30)" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] font-mono text-slate-300 hover:text-white transition-colors">+1m</button>
+            <button v-if="form.expirationDate" type="button" @click="form.expirationDate = ''" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[10px] text-rose-400 hover:text-rose-300 transition-colors">Clear</button>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -115,16 +127,35 @@ const emit = defineEmits(['close', 'saved']);
 
 const locations = ref([]);
 
+function addDaysToDate(baseDateStr, days) {
+  const base = baseDateStr ? new Date(baseDateStr + 'T00:00:00') : new Date();
+  base.setDate(base.getDate() + days);
+  return base.toISOString().substring(0, 10);
+}
+
+function calculateDefaultExpiration() {
+  const shelfDays = props.item.category?.defaultShelfLifeDays;
+  if (shelfDays && shelfDays > 0) {
+    return addDaysToDate(new Date().toISOString().substring(0, 10), shelfDays);
+  }
+  return '';
+}
+
 const form = reactive({
   itemId: props.item.id,
   locationId: props.item.defaultLocation?.id || 'loc-pantry',
   quantity: 1,
   unit: props.item.defaultUnit || 'count',
-  expirationDate: '',
+  expirationDate: calculateDefaultExpiration(),
   note: '',
   unitPrice: null,
   store: '',
 });
+
+function adjustExpiration(days) {
+  const current = form.expirationDate || new Date().toISOString().substring(0, 10);
+  form.expirationDate = addDaysToDate(current, days);
+}
 
 onMounted(async () => {
   try {

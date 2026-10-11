@@ -25,6 +25,79 @@
       </div>
     </div>
 
+    <!-- Smart Restock & Seasonal Recommendations Tray -->
+    <div v-if="soonDepletedItems.length > 0 || seasonalSuggestions.length > 0" class="bg-slate-900/90 border border-brand-500/30 rounded-3xl p-5 shadow-lg space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-300 flex items-center justify-center border border-brand-500/30">
+            <Sparkles class="w-4 h-4" />
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Smart Restock &amp; Seasonal Recommendations</h3>
+            <p class="text-[11px] text-slate-400">Based on your household's actual consumption velocity and calendar seasonality.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <!-- Predicted Run-Outs -->
+        <div v-if="soonDepletedItems.length > 0" class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-2.5">
+          <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+            <Clock class="w-3.5 h-3.5" />
+            <span>Predicted to Run Out Soon (Next 3–5 Days)</span>
+          </span>
+          <div class="space-y-2">
+            <div 
+              v-for="p in soonDepletedItems" 
+              :key="p.itemId"
+              class="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-900/60 border border-slate-700/50">
+              <div class="min-w-0">
+                <span class="font-semibold text-xs text-white truncate block">{{ p.itemName }}</span>
+                <span class="text-[10px] text-slate-400 font-mono">
+                  Current: {{ p.currentQuantity }} {{ p.unit }} &bull; Est. runs out in {{ p.estimatedDaysRemaining !== null ? p.estimatedDaysRemaining + 'd' : 'soon' }}
+                </span>
+              </div>
+              <button 
+                type="button" 
+                @click="addSuggestedToShopping(p.itemName)"
+                class="px-2.5 py-1 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-200 border border-brand-500/30 text-[11px] font-bold whitespace-nowrap flex items-center gap-1 transition-colors">
+                <Plus class="w-3 h-3" />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seasonal Staples In Season -->
+        <div v-if="seasonalSuggestions.length > 0" class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 space-y-2.5">
+          <span class="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+            <Calendar class="w-3.5 h-3.5" />
+            <span>Seasonal Staples In Season</span>
+          </span>
+          <div class="space-y-2">
+            <div 
+              v-for="s in seasonalSuggestions" 
+              :key="s.itemId"
+              class="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-900/60 border border-slate-700/50">
+              <div class="min-w-0">
+                <span class="font-semibold text-xs text-white truncate block">{{ s.itemName }}</span>
+                <span class="text-[10px] text-emerald-400/90 font-mono">
+                  {{ s.seasonalWindow }} &bull; {{ s.confidencePercent }}% seasonal concentration
+                </span>
+              </div>
+              <button 
+                type="button" 
+                @click="addSuggestedToShopping(s.itemName)"
+                class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 text-[11px] font-bold whitespace-nowrap flex items-center gap-1 transition-colors">
+                <Plus class="w-3 h-3" />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Layout: 2 Columns if Bring! is configured; Clean Full Width if Standalone -->
     <div :class="isBringConfigured ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'grid grid-cols-1 gap-6'">
       
@@ -165,7 +238,10 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { ShoppingCart, RefreshCw, AlertTriangle, CheckCircle, Plus, Check, Package } from 'lucide-vue-next';
+import { 
+  ShoppingCart, RefreshCw, AlertTriangle, CheckCircle, Plus, Check, Package,
+  Clock, Calendar, Sparkles 
+} from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
 
@@ -176,6 +252,8 @@ const bringItems = ref([]);
 const settings = ref({});
 const quickItemName = ref('');
 const isSyncing = ref(false);
+const predictions = ref([]);
+const seasonalSuggestions = ref([]);
 
 const isBringConfigured = computed(() => {
   return Boolean(settings.value?.bringEmail && settings.value.bringEmail.trim().length > 0);
@@ -185,14 +263,39 @@ const lowStockItems = computed(() => {
   return items.value.filter(i => i.isLowStock || i.isOutOfStock);
 });
 
+const soonDepletedItems = computed(() => {
+  return predictions.value.filter(p => p.runsOutSoon && p.currentQuantity > 0);
+});
+
 onMounted(() => {
   fetchAll();
 });
 
 async function fetchAll() {
-  await Promise.all([fetchPantryItems(), fetchSettings()]);
+  await Promise.all([fetchPantryItems(), fetchSettings(), fetchPredictions()]);
   if (isBringConfigured.value) {
     await fetchBringList();
+  }
+}
+
+async function fetchPredictions() {
+  try {
+    const [pRes, sRes] = await Promise.all([
+      api.getDepletionPredictions(),
+      api.getSeasonalSuggestions(),
+    ]);
+    predictions.value = pRes.data || [];
+    seasonalSuggestions.value = sRes.data || [];
+  } catch (err) {
+    console.error('Failed to load predictions:', err);
+  }
+}
+
+async function addSuggestedToShopping(name) {
+  if (isBringConfigured.value) {
+    await pushSingleItemToBring({ name, defaultPurchaseAmount: '1' });
+  } else {
+    showToast(`"${name}" flagged for restock!`);
   }
 }
 

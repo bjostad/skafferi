@@ -245,6 +245,99 @@
     </div>
 
     <!-- ========================================================================= -->
+    <!-- SECTION: CATEGORIES & DEFAULT SHELF-LIFE PRESETS (Collapsible)           -->
+    <!-- ========================================================================= -->
+    <div id="section-categories" class="bg-slate-850 bg-slate-900/90 border border-slate-700/80 rounded-3xl overflow-hidden shadow-lg transition-all duration-200">
+      
+      <!-- Collapsible Header -->
+      <div 
+        @click="toggleSection('categories')"
+        class="p-5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-800/40 transition-colors">
+        <div class="flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <FolderTree class="w-5 h-5" />
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-lg text-white">Categories &amp; Shelf-Life Presets</h3>
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                {{ categories.length }}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Customize automatic expiration date offsets applied when adding new items or batches.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-transform">
+            <ChevronDown class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': openSections.categories }" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsible Content -->
+      <div v-show="openSections.categories" class="p-6 pt-0 border-t border-slate-800/80 mt-2 space-y-4 animate-in fade-in duration-150">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+          <div 
+            v-for="cat in categories" 
+            :key="cat.id"
+            class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between hover:border-brand-500/40 transition-all">
+            
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-sm text-white">{{ cat.name }}</span>
+                <span v-if="cat.defaultShelfLifeDays" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  +{{ cat.defaultShelfLifeDays }}d
+                </span>
+                <span v-else class="text-[10px] text-slate-500 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
+                  None
+                </span>
+              </div>
+
+              <div>
+                <label class="text-[11px] text-slate-400 block mb-1">Default Shelf Life (Days)</label>
+                <div class="flex items-center gap-2">
+                  <input 
+                    type="number" 
+                    min="1"
+                    max="3650"
+                    placeholder="e.g. 7" 
+                    v-model.number="cat.defaultShelfLifeDays" 
+                    class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500" />
+                  <span class="text-xs text-slate-400 whitespace-nowrap">days</span>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1">
+                  {{ formatShelfLifeDescription(cat.defaultShelfLifeDays) }}
+                </p>
+              </div>
+            </div>
+
+            <div class="pt-3 mt-3 border-t border-slate-700/60 flex justify-end">
+              <button 
+                type="button" 
+                @click="saveCategoryShelfLife(cat)" 
+                class="px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-semibold transition-colors">
+                Save
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button 
+            type="button" 
+            @click="saveAllCategories" 
+            class="px-5 py-2 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-sm flex items-center gap-2">
+            <Save class="w-4 h-4" />
+            <span>Save All Category Presets</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================================================= -->
     <!-- SECTION 2: HOUSEHOLD USERS (Collapsible)                                  -->
     <!-- ========================================================================= -->
     <div id="section-users" class="bg-slate-850 bg-slate-900/90 border border-slate-700/80 rounded-3xl overflow-hidden shadow-lg transition-all duration-200">
@@ -705,6 +798,201 @@
 
     </div>
 
+    <!-- ========================================================================= -->
+    <!-- SECTION: EMAIL ALERTS & SMTP DIGESTS (Collapsible)                       -->
+    <!-- ========================================================================= -->
+    <div id="section-email" class="bg-slate-850 bg-slate-900/90 border border-slate-700/80 rounded-3xl overflow-hidden shadow-lg transition-all duration-200">
+      
+      <!-- Collapsible Header -->
+      <div 
+        @click="toggleSection('email')"
+        class="p-5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-800/40 transition-colors">
+        <div class="flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+            <Mail class="w-5 h-5" />
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-lg text-white">Email Notifications (SMTP)</h3>
+              <span v-if="settings.smtpEnabled" class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ACTIVE
+              </span>
+              <span v-else class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                DISABLED
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Send daily morning expiration digests and weekend grocery shopping prep emails.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-transform">
+            <ChevronDown class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': openSections.email }" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsible Content -->
+      <div v-show="openSections.email" class="p-6 pt-0 border-t border-slate-800/80 mt-2 space-y-6 animate-in fade-in duration-150">
+        
+        <!-- Enable Switch -->
+        <div class="p-4 bg-slate-800/80 border border-slate-700/80 rounded-2xl flex items-center justify-between">
+          <div>
+            <h4 class="font-bold text-white text-sm">Enable SMTP Outgoing Email</h4>
+            <p class="text-xs text-slate-400 mt-0.5">Connect to your local mail server, Gmail app password, or Mailgun/SendGrid.</p>
+          </div>
+          <input 
+            type="checkbox" 
+            v-model="settings.smtpEnabled" 
+            class="w-5 h-5 rounded text-brand-600 bg-slate-900 border-slate-700 focus:ring-brand-500" />
+        </div>
+
+        <!-- SMTP Server Credentials -->
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-4">
+          <h4 class="font-bold text-white text-sm border-b border-slate-700/80 pb-2">SMTP Server Configuration</h4>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="text-xs font-semibold text-slate-300 block mb-1">SMTP Host / Server</label>
+              <input 
+                v-model="settings.smtpHost" 
+                placeholder="e.g. smtp.gmail.com, mail.example.com" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">Port</label>
+              <input 
+                type="number"
+                v-model.number="settings.smtpPort" 
+                placeholder="587" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">Encryption</label>
+              <select 
+                v-model="settings.smtpEncryption" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+                <option value="TLS">STARTTLS (587)</option>
+                <option value="SSL">SSL / TLS (465)</option>
+                <option value="NONE">Plain / None (25)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">SMTP Username</label>
+              <input 
+                v-model="settings.smtpUsername" 
+                placeholder="e.g. user@gmail.com" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">SMTP Password</label>
+              <input 
+                type="password"
+                v-model="settings.smtpPassword" 
+                placeholder="App password or secret" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">From Email Address</label>
+              <input 
+                v-model="settings.smtpFromAddress" 
+                placeholder="e.g. skafferi@home.lan" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">Recipient Addresses (comma-separated)</label>
+              <input 
+                v-model="settings.smtpRecipients" 
+                placeholder="e.g. brian@example.com, family@example.com" 
+                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Digest Schedules -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h5 class="font-bold text-white text-xs">Daily Expiration Digest</h5>
+                <p class="text-[11px] text-slate-400">Dispatched every morning at 08:00 AM</p>
+              </div>
+              <input 
+                type="checkbox" 
+                v-model="settings.smtpDailyDigestEnabled" 
+                class="w-4 h-4 rounded text-brand-600 bg-slate-900 border-slate-700 focus:ring-brand-500" />
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Summarizes foods expired, foods expiring in the next 48 hours, and produce check alerts.
+            </p>
+            <div class="pt-2">
+              <button 
+                type="button" 
+                @click="triggerManualDigest('daily')"
+                :disabled="isSendingDigest"
+                class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-colors">
+                Send Daily Digest Now
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h5 class="font-bold text-white text-xs">Weekly Grocery Prep Digest</h5>
+                <p class="text-[11px] text-slate-400">Dispatched every Friday at 05:00 PM</p>
+              </div>
+              <input 
+                type="checkbox" 
+                v-model="settings.smtpWeeklyDigestEnabled" 
+                class="w-4 h-4 rounded text-brand-600 bg-slate-900 border-slate-700 focus:ring-brand-500" />
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Summarizes depleted items, low-stock staples below threshold, and predicted run-outs.
+            </p>
+            <div class="pt-2">
+              <button 
+                type="button" 
+                @click="triggerManualDigest('weekly')"
+                :disabled="isSendingDigest"
+                class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-colors">
+                Send Weekly Digest Now
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email Action Footer -->
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+          <button 
+            type="button" 
+            @click="testSmtpEmail"
+            :disabled="isTestingEmail || !settings.smtpHost"
+            class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold text-xs shadow-sm flex items-center gap-2 transition-all">
+            <Send class="w-3.5 h-3.5" />
+            <span>{{ isTestingEmail ? 'Sending Test Email...' : 'Send Test Email' }}</span>
+          </button>
+
+          <button 
+            type="button" 
+            @click="saveAllSettings" 
+            :disabled="isSaving" 
+            class="px-5 py-2 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-sm flex items-center gap-2">
+            <Save class="w-4 h-4" />
+            <span>Save Email Settings</span>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
     <!-- Settings Page Footer -->
     <div class="pt-6 pb-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
       <div class="flex items-center gap-2">
@@ -963,7 +1251,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { 
   MapPin, Users, Link2, ShieldCheck, Plus, Edit2, Trash2, UserPlus, Save, X, Info, ExternalLink,
-  ChevronDown, ChevronsUpDown, Bell, Clock, Sparkles,
+  ChevronDown, ChevronsUpDown, Bell, Clock, Sparkles, FolderTree, Mail, Send,
   Refrigerator, Snowflake, Flame, Archive, LayoutGrid, Box, Home, Warehouse 
 } from 'lucide-vue-next';
 import api from '../services/api';
@@ -981,6 +1269,8 @@ const bringLists = ref([]);
 const openSections = reactive({
   locations: true,
   notifications: true,
+  categories: true,
+  email: true,
   users: true,
   auth: true,
   integrations: true,
@@ -994,6 +1284,8 @@ function toggleAllSections() {
   const target = !areAllOpen.value;
   openSections.locations = target;
   openSections.notifications = target;
+  openSections.categories = target;
+  openSections.email = target;
   openSections.users = target;
   openSections.auth = target;
   openSections.integrations = target;
@@ -1016,6 +1308,8 @@ function jumpToSection(secId) {
 const sections = [
   { id: 'locations', title: 'Storage Locations', icon: MapPin },
   { id: 'notifications', title: 'Freshness & Expiry', icon: Bell },
+  { id: 'categories', title: 'Categories & Shelf-Life', icon: FolderTree },
+  { id: 'email', title: 'Email Alerts (SMTP)', icon: Mail },
   { id: 'users', title: 'Household Users', icon: Users },
   { id: 'auth', title: 'SSO & Auth', icon: ShieldCheck },
   { id: 'integrations', title: 'Integrations & APIs', icon: Link2 },
@@ -1030,9 +1324,12 @@ watch(() => route.query.section || route.query.tab, (sec) => {
 }, { immediate: true });
 
 const locations = ref([]);
+const categories = ref([]);
 const users = ref([]);
 const isSaving = ref(false);
 const isTestingBring = ref(false);
+const isTestingEmail = ref(false);
+const isSendingDigest = ref(false);
 
 const settings = reactive({
   bringEmail: '',
@@ -1055,7 +1352,87 @@ const settings = reactive({
   googleAuthEnabled: false,
   googleClientId: '',
   googleClientSecret: '',
+  smtpHost: '',
+  smtpPort: 587,
+  smtpUsername: '',
+  smtpPassword: '',
+  smtpEncryption: 'TLS',
+  smtpFromAddress: '',
+  smtpRecipients: '',
+  smtpEnabled: false,
+  smtpDailyDigestEnabled: false,
+  smtpWeeklyDigestEnabled: false,
 });
+
+function formatShelfLifeDescription(days) {
+  if (!days || days <= 0) return 'No automatic expiration offset';
+  if (days < 7) return `≈ ${days} day${days > 1 ? 's' : ''}`;
+  if (days < 30) {
+    const weeks = Math.round(days / 7);
+    return `≈ ${weeks} week${weeks > 1 ? 's' : ''} (${days} days)`;
+  }
+  if (days < 365) {
+    const months = Math.round(days / 30);
+    return `≈ ${months} month${months > 1 ? 's' : ''} (${days} days)`;
+  }
+  const years = Math.round((days / 365) * 10) / 10;
+  return `≈ ${years} year${years > 1 ? 's' : ''} (${days} days)`;
+}
+
+async function loadCategories() {
+  try {
+    const res = await api.getCategories();
+    categories.value = res.data;
+  } catch (err) {
+    console.error('Failed to load categories:', err);
+  }
+}
+
+async function saveCategoryShelfLife(cat) {
+  try {
+    await api.updateCategory(cat.id, cat);
+    showToast(`Saved default shelf-life for ${cat.name}!`);
+  } catch (err) {
+    showToast('Failed to save category: ' + err.message, 'error');
+  }
+}
+
+async function saveAllCategories() {
+  try {
+    await Promise.all(categories.value.map(c => api.updateCategory(c.id, c)));
+    showToast('Saved all category shelf-life presets!');
+  } catch (err) {
+    showToast('Failed to save categories: ' + err.message, 'error');
+  }
+}
+
+async function testSmtpEmail() {
+  isTestingEmail.value = true;
+  try {
+    const res = await api.testEmail();
+    if (res.data.success) {
+      showToast('Test email sent successfully! Check your inbox.');
+    } else {
+      showToast('Test email failed: ' + (res.data.error || 'Unknown error'), 'error');
+    }
+  } catch (err) {
+    showToast('Failed to send test email: ' + (err.response?.data?.error || err.message), 'error');
+  } finally {
+    isTestingEmail.value = false;
+  }
+}
+
+async function triggerManualDigest(type) {
+  isSendingDigest.value = true;
+  try {
+    const res = await api.sendDigest(type);
+    showToast(res.data.message || 'Digest sent successfully!');
+  } catch (err) {
+    showToast('Failed to dispatch digest: ' + (err.response?.data?.error || err.message), 'error');
+  } finally {
+    isSendingDigest.value = false;
+  }
+}
 
 // Location Modal
 const locationModalOpen = ref(false);
@@ -1083,7 +1460,7 @@ onMounted(() => {
 });
 
 async function loadAll() {
-  await Promise.all([loadLocations(), loadUsers(), loadSettings()]);
+  await Promise.all([loadLocations(), loadUsers(), loadSettings(), loadCategories()]);
 }
 
 async function loadLocations() {
