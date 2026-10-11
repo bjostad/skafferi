@@ -72,7 +72,12 @@
           class="px-3.5 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-2"
           :class="$route.path === '/recipes' ? 'bg-brand-500/25 text-brand-200 border border-brand-400/50 font-bold shadow-sm' : 'text-slate-300 hover:text-white hover:bg-slate-800/80'">
           <ChefHat class="w-4 h-4" />
-          Recipes
+          <span>Recipes</span>
+          <span 
+            v-if="pendingMealCount > 0" 
+            class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+            {{ pendingMealCount }}
+          </span>
         </router-link>
 
         <router-link 
@@ -373,7 +378,14 @@
         Expiring
       </router-link>
       <router-link to="/recipes" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/recipes' ? 'text-brand-400 font-bold' : 'text-slate-400'">
-        <ChefHat class="w-4 h-4" />
+        <div class="relative">
+          <ChefHat class="w-4 h-4" />
+          <span 
+            v-if="pendingMealCount > 0" 
+            class="absolute -top-1.5 -right-2 px-1 py-0.2 text-[9px] font-extrabold rounded-full bg-amber-500 text-slate-950 leading-tight">
+            {{ pendingMealCount }}
+          </span>
+        </div>
         Recipes
       </router-link>
       <router-link to="/shopping" class="flex flex-col items-center gap-1 py-1 px-2 rounded-lg whitespace-nowrap" :class="$route.path === '/shopping' ? 'text-brand-400 font-bold' : 'text-slate-400'">
@@ -414,6 +426,7 @@ const userMenuRef = ref(null);
 const notifMenuOpen = ref(false);
 const notifMenuRef = ref(null);
 const notifSummary = ref(null);
+const pendingMealCount = ref(0);
 
 const currentUser = computed(() => auth.getCurrentUser());
 const allUsers = computed(() => auth.state.allUsers);
@@ -426,6 +439,23 @@ async function loadNotifications() {
     notifSummary.value = res.data;
   } catch (err) {
     console.error('Failed to load notifications:', err);
+  }
+}
+
+async function loadPendingMealsCount() {
+  try {
+    const res = await api.getPendingMealsCount();
+    pendingMealCount.value = res.data?.count || 0;
+  } catch (err) {
+    console.error('Failed to load pending meals count:', err);
+  }
+}
+
+function handlePendingMealsChanged(e) {
+  if (e.detail && typeof e.detail.count === 'number') {
+    pendingMealCount.value = e.detail.count;
+  } else {
+    loadPendingMealsCount();
   }
 }
 
@@ -444,12 +474,14 @@ function goToItem(item) {
 }
 
 onMounted(async () => {
-  await Promise.all([auth.loadUsers(), loadNotifications()]);
+  await Promise.all([auth.loadUsers(), loadNotifications(), loadPendingMealsCount()]);
   document.addEventListener('click', handleClickOutside);
+  window.addEventListener('pending-meals-changed', handlePendingMealsChanged);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('pending-meals-changed', handlePendingMealsChanged);
 });
 
 function switchUser(user) {

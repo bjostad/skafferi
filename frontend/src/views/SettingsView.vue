@@ -800,6 +800,40 @@
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
             </div>
           </div>
+
+          <!-- Meal Deduction Mode Setting -->
+          <div class="pt-3 border-t border-slate-700/80 space-y-2">
+            <label class="text-xs font-semibold text-slate-300 block">Cooked Meal Inventory Deduction</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label 
+                class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+                :class="!settings.mealieAutoDeduct ? 'bg-brand-500/10 border-brand-500/50 text-white' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'">
+                <input 
+                  type="radio" 
+                  :value="false" 
+                  v-model="settings.mealieAutoDeduct" 
+                  class="mt-0.5 text-brand-500 focus:ring-brand-500" />
+                <div>
+                  <span class="text-xs font-bold block text-white">Review Queue (Recommended)</span>
+                  <span class="text-[11px] text-slate-400 block mt-0.5">Hold cooked meals in Recipes &gt; Cooked Meals Queue to verify ingredients and adjust deduction amounts before committing.</span>
+                </div>
+              </label>
+
+              <label 
+                class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors"
+                :class="settings.mealieAutoDeduct ? 'bg-brand-500/10 border-brand-500/50 text-white' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'">
+                <input 
+                  type="radio" 
+                  :value="true" 
+                  v-model="settings.mealieAutoDeduct" 
+                  class="mt-0.5 text-brand-500 focus:ring-brand-500" />
+                <div>
+                  <span class="text-xs font-bold block text-white">Immediate Auto-Deduct</span>
+                  <span class="text-[11px] text-slate-400 block mt-0.5">Automatically deduct pantry items via FIFO in the background as soon as Mealie triggers a webhook.</span>
+                </div>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- 3. Kroger Developer API -->
@@ -1402,6 +1436,7 @@ const settings = reactive({
   expirationReminderEnabled: true,
   mealieBaseUrl: '',
   mealieApiToken: '',
+  mealieAutoDeduct: false,
   krogerClientId: '',
   krogerClientSecret: '',
   krogerLocationId: '',

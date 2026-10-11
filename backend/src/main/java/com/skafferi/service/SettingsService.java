@@ -38,6 +38,9 @@ public class SettingsService {
     @Value("${skafferi.integrations.mealie.api-token:}")
     private String defaultMealieToken;
 
+    @Value("${skafferi.integrations.mealie.auto-deduct:false}")
+    private boolean defaultMealieAutoDeduct;
+
     @Value("${skafferi.integrations.kroger.client-id:}")
     private String defaultKrogerClientId;
 
@@ -128,6 +131,7 @@ public class SettingsService {
                 defaultBringAutoSync,
                 defaultMealieUrl,
                 defaultMealieToken,
+                defaultMealieAutoDeduct,
                 defaultKrogerClientId,
                 defaultKrogerClientSecret,
                 defaultKrogerLocationId,
@@ -165,6 +169,7 @@ public class SettingsService {
                 raw.bringAutoSync(),
                 raw.mealieBaseUrl(),
                 raw.mealieApiToken() != null && !raw.mealieApiToken().isBlank() ? "********" : "",
+                raw.mealieAutoDeduct() != null ? raw.mealieAutoDeduct() : false,
                 raw.krogerClientId(),
                 raw.krogerClientSecret() != null && !raw.krogerClientSecret().isBlank() ? "********" : "",
                 raw.krogerLocationId(),
@@ -218,6 +223,7 @@ public class SettingsService {
                 dto.bringAutoSync(),
                 dto.mealieBaseUrl(),
                 mealieToken,
+                dto.mealieAutoDeduct() != null ? dto.mealieAutoDeduct() : false,
                 dto.krogerClientId(),
                 krogerSecret,
                 dto.krogerLocationId(),
@@ -280,5 +286,10 @@ public class SettingsService {
     public boolean isExpirationReminderEnabled() {
         Boolean enabled = getRawSettings().expirationReminderEnabled();
         return enabled != null ? enabled : true;
+    }
+
+    public boolean isMealieAutoDeduct() {
+        Boolean auto = getRawSettings().mealieAutoDeduct();
+        return auto != null && auto;
     }
 }

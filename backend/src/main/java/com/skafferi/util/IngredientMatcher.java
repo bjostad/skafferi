@@ -31,29 +31,58 @@ public class IngredientMatcher {
 
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\b(\\d+/\\d+|\\d+(\\.\\d+)?)\\b");
 
+    public enum MatchConfidence {
+        EXACT,
+        SUBSTRING,
+        TOKEN,
+        FUZZY,
+        NONE
+    }
+
+    /**
+     * Evaluates match confidence tier:
+     * EXACT -> Direct normalized match
+     * SUBSTRING -> Full substring containment
+     * TOKEN -> Shared core token / prefix
+     * FUZZY -> Noise-stripped stem or Levenshtein similarity
+     * NONE -> No match found
+     */
+    public static MatchConfidence evaluateMatch(String ingredient, String pantryItemName) {
+        if (ingredient == null || pantryItemName == null) return MatchConfidence.NONE;
+
+        String normIng = normalize(ingredient);
+        String normStock = normalize(pantryItemName);
+        if (normIng.isEmpty() || normStock.isEmpty()) return MatchConfidence.NONE;
+
+        // TIER 1: Simple exact match
+        if (normIng.equals(normStock)) {
+            return MatchConfidence.EXACT;
+        }
+
+        // TIER 1b: Substring containment
+        if (normIng.contains(normStock) || normStock.contains(normIng)) {
+            return MatchConfidence.SUBSTRING;
+        }
+
+        // TIER 2: Simple token / prefix match
+        if (simpleTokenMatch(normIng, normStock)) {
+            return MatchConfidence.TOKEN;
+        }
+
+        // TIER 3: Fuzzy matching fallback (executed ONLY when simple matches fail)
+        if (fuzzyMatch(normIng, normStock)) {
+            return MatchConfidence.FUZZY;
+        }
+
+        return MatchConfidence.NONE;
+    }
+
     /**
      * Executes tiered matching:
      * Returns true if a match is found through simple or fallback fuzzy matching.
      */
     public static boolean matches(String ingredient, String pantryItemName) {
-        if (ingredient == null || pantryItemName == null) return false;
-
-        String normIng = normalize(ingredient);
-        String normStock = normalize(pantryItemName);
-        if (normIng.isEmpty() || normStock.isEmpty()) return false;
-
-        // TIER 1: Simple exact match & substring containment
-        if (simpleExactOrContainmentMatch(normIng, normStock)) {
-            return true;
-        }
-
-        // TIER 2: Simple token / prefix match
-        if (simpleTokenMatch(normIng, normStock)) {
-            return true;
-        }
-
-        // TIER 3: Fuzzy matching fallback (executed ONLY when simple matches fail)
-        return fuzzyMatch(normIng, normStock);
+        return evaluateMatch(ingredient, pantryItemName) != MatchConfidence.NONE;
     }
 
     private static boolean simpleExactOrContainmentMatch(String normIng, String normStock) {

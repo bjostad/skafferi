@@ -21,13 +21,19 @@ public class MealieWebhookService {
     private final ItemRepository itemRepository;
     private final ExternalMappingRepository mappingRepository;
     private final InventoryService inventoryService;
+    private final SettingsService settingsService;
+    private final PendingMealService pendingMealService;
 
     public MealieWebhookService(ItemRepository itemRepository,
                                 ExternalMappingRepository mappingRepository,
-                                InventoryService inventoryService) {
+                                InventoryService inventoryService,
+                                SettingsService settingsService,
+                                PendingMealService pendingMealService) {
         this.itemRepository = itemRepository;
         this.mappingRepository = mappingRepository;
         this.inventoryService = inventoryService;
+        this.settingsService = settingsService;
+        this.pendingMealService = pendingMealService;
     }
 
     @Transactional
@@ -37,6 +43,13 @@ public class MealieWebhookService {
 
         if (payload.ingredients() == null || payload.ingredients().isEmpty()) {
             log.info("No ingredients provided in webhook payload for '{}'", payload.recipeName());
+            return;
+        }
+
+        // If auto-deduct is disabled (default), queue meal for user review & reconciliation
+        if (!settingsService.isMealieAutoDeduct()) {
+            pendingMealService.queueMealFromWebhook(payload);
+            log.info("Queued meal '{}' for pending user reconciliation review", payload.recipeName());
             return;
         }
 

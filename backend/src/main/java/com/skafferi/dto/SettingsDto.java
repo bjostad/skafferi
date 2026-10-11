@@ -10,6 +10,7 @@ public record SettingsDto(
         // Mealie
         String mealieBaseUrl,
         String mealieApiToken,
+        Boolean mealieAutoDeduct,
 
         // Kroger
         String krogerClientId,

@@ -181,4 +181,21 @@ export default {
   addMissingToShoppingList(items = []) {
     return api.post('/recipes/missing-to-shopping', { items });
   },
+
+  // Pending Cooked Meals & Reconciliation
+  getPendingMeals() {
+    return api.get('/meals/pending');
+  },
+  getPendingMealsCount() {
+    return api.get('/meals/pending/count');
+  },
+  reconcileMeal(id, payload) {
+    return api.post(`/meals/pending/${id}/reconcile`, payload);
+  },
+  reconcileAllMeals() {
+    return api.post('/meals/pending/reconcile-all');
+  },
+  dismissPendingMeal(id) {
+    return api.delete(`/meals/pending/${id}`);
+  },
 };
