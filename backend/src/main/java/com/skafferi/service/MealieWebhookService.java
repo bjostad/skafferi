@@ -5,6 +5,7 @@ import com.skafferi.domain.Item;
 import com.skafferi.dto.MealieWebhookPayload;
 import com.skafferi.repository.ExternalMappingRepository;
 import com.skafferi.repository.ItemRepository;
+import com.skafferi.util.IngredientMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -81,6 +82,14 @@ public class MealieWebhookService {
             String iName = item.getName().toLowerCase();
             String fName = foodName.toLowerCase();
             if (iName.contains(fName) || fName.contains(iName)) {
+                return Optional.of(item);
+            }
+        }
+
+        // 4. Fallback: Tiered fuzzy matching only after simple match isn't found
+        for (Item item : all) {
+            if (IngredientMatcher.matches(foodName, item.getName())) {
+                log.info("Fuzzy matched Mealie ingredient '{}' to pantry item '{}'", foodName, item.getName());
                 return Optional.of(item);
             }
         }

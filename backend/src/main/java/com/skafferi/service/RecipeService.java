@@ -7,6 +7,7 @@ import com.skafferi.dto.NotificationSummaryDto;
 import com.skafferi.dto.PantryItemSummaryDto;
 import com.skafferi.dto.SettingsDto;
 import com.skafferi.repository.ItemRepository;
+import com.skafferi.util.IngredientMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -49,14 +50,14 @@ public class RecipeService {
                 .collect(Collectors.toList());
 
         Set<String> inStockNames = inStockItems.stream()
-                .map(i -> normalize(i.name()))
+                .map(PantryItemSummaryDto::name)
                 .collect(Collectors.toSet());
 
         NotificationSummaryDto notifs = inventoryService.getNotificationSummary();
         Set<String> expiringNames = new HashSet<>();
-        notifs.expiringSoonItems().forEach(i -> expiringNames.add(normalize(i.name())));
-        notifs.expiredItems().forEach(i -> expiringNames.add(normalize(i.name())));
-        notifs.freshCheckItems().forEach(i -> expiringNames.add(normalize(i.name())));
+        notifs.expiringSoonItems().forEach(i -> expiringNames.add(i.name()));
+        notifs.expiredItems().forEach(i -> expiringNames.add(i.name()));
+        notifs.freshCheckItems().forEach(i -> expiringNames.add(i.name()));
 
         List<Map<String, Object>> allRecipes = fetchRecipesFromMealieOrPresets(rawSettings);
 
@@ -72,10 +73,9 @@ public class RecipeService {
             List<String> expiringUsed = new ArrayList<>();
 
             for (String ing : ingredients) {
-                String normIng = normalize(ing);
                 boolean foundInStock = false;
                 for (String stockName : inStockNames) {
-                    if (ingredientMatches(normIng, stockName)) {
+                    if (IngredientMatcher.matches(ing, stockName)) {
                         foundInStock = true;
                         matched.add(ing);
                         break;
@@ -86,7 +86,7 @@ public class RecipeService {
                     missing.add(ing);
                 } else {
                     for (String expName : expiringNames) {
-                        if (ingredientMatches(normIng, expName)) {
+                        if (IngredientMatcher.matches(ing, expName)) {
                             expiringUsed.add(ing);
                             break;
                         }
@@ -184,8 +184,12 @@ public class RecipeService {
                         List<String> ings = new ArrayList<>();
                         if (r.has("recipeIngredient")) {
                             for (JsonNode ing : r.get("recipeIngredient")) {
-                                if (ing.has("note")) {
+                                if (ing.has("food") && ing.get("food").has("name") && !ing.get("food").get("name").asText().isBlank()) {
+                                    ings.add(ing.get("food").get("name").asText());
+                                } else if (ing.has("note") && !ing.get("note").asText().isBlank()) {
                                     ings.add(ing.get("note").asText());
+                                } else if (ing.has("title") && !ing.get("title").asText().isBlank()) {
+                                    ings.add(ing.get("title").asText());
                                 } else if (ing.isTextual()) {
                                     ings.add(ing.asText());
                                 }
@@ -287,30 +291,5 @@ public class RecipeService {
                 "instructions", instructions,
                 "chefTips", "Pro tip: Keep vegetable trims and herb stems in a freezer bag to simmer rich homemade vegetable stock later!"
         );
-    }
-
-    private String normalize(String s) {
-        if (s == null) return "";
-        return s.toLowerCase()
-                .replaceAll("[^a-z0-9\\s]", "")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private boolean ingredientMatches(String normIng, String normStock) {
-        if (normIng.isEmpty() || normStock.isEmpty()) return false;
-        if (normIng.contains(normStock) || normStock.contains(normIng)) return true;
-        String[] ingWords = normIng.split(" ");
-        String[] stockWords = normStock.split(" ");
-        for (String iw : ingWords) {
-            if (iw.length() < 3) continue;
-            for (String sw : stockWords) {
-                if (sw.length() < 3) continue;
-                if (iw.equals(sw) || iw.startsWith(sw) || sw.startsWith(iw)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 }
