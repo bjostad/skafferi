@@ -71,7 +71,7 @@ public class SettingsService {
     @Value("${skafferi.auth.google.client-secret:}")
     private String defaultGoogleClientSecret;
 
-    @Value("${skafferi.version:0.6.0-beta}")
+    @Value("${skafferi.version:0.6.1-beta}")
     private String configuredVersion;
 
     private final org.springframework.boot.info.BuildProperties buildProperties;
