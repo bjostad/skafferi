@@ -277,58 +277,117 @@
 
       <!-- Collapsible Content -->
       <div v-show="openSections.categories" class="p-6 pt-0 border-t border-slate-800/80 mt-2 space-y-4 animate-in fade-in duration-150">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1">
+        
+        <!-- Category Presets List -->
+        <div class="bg-slate-900/60 border border-slate-700/80 rounded-2xl overflow-hidden divide-y divide-slate-800/80">
           <div 
             v-for="cat in categories" 
             :key="cat.id"
-            class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-4 flex flex-col justify-between hover:border-brand-500/40 transition-all">
+            class="p-3.5 sm:px-5 sm:py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3.5 hover:bg-slate-800/40 transition-colors group">
             
-            <div class="space-y-3">
-              <div class="flex items-center justify-between">
-                <span class="font-bold text-sm text-white">{{ cat.name }}</span>
-                <span v-if="cat.defaultShelfLifeDays" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                  +{{ cat.defaultShelfLifeDays }}d
-                </span>
-                <span v-else class="text-[10px] text-slate-500 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
-                  None
-                </span>
+            <!-- Category Info & Icon -->
+            <div class="flex items-center gap-3.5 min-w-[220px]">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+                <component :is="getCategoryIconComponent(cat.icon)" class="w-5 h-5" />
               </div>
-
-              <div>
-                <label class="text-[11px] text-slate-400 block mb-1">Default Shelf Life (Days)</label>
+              <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    min="1"
-                    max="3650"
-                    placeholder="e.g. 7" 
-                    v-model.number="cat.defaultShelfLifeDays" 
-                    class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500" />
-                  <span class="text-xs text-slate-400 whitespace-nowrap">days</span>
+                  <span class="font-bold text-sm text-white truncate">{{ cat.name }}</span>
+                  <span v-if="cat.defaultShelfLifeDays" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
+                    +{{ cat.defaultShelfLifeDays }}d
+                  </span>
+                  <span v-else class="text-[10px] text-slate-500 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/60 shrink-0">
+                    No default
+                  </span>
                 </div>
-                <p class="text-[10px] text-slate-500 mt-1">
+                <p class="text-[11px] text-slate-400 mt-0.5 truncate">
                   {{ formatShelfLifeDescription(cat.defaultShelfLifeDays) }}
                 </p>
               </div>
             </div>
 
-            <div class="pt-3 mt-3 border-t border-slate-700/60 flex justify-end">
+            <!-- Controls: Quick presets, input, and save -->
+            <div class="flex items-center gap-2 sm:gap-3 flex-wrap md:flex-nowrap justify-between md:justify-end">
+              <!-- Quick Chips -->
+              <div class="flex items-center gap-1">
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = 7" 
+                  title="Set to 1 week (7 days)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 border border-slate-700/70 transition-colors">
+                  1w
+                </button>
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = 14" 
+                  title="Set to 2 weeks (14 days)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 border border-slate-700/70 transition-colors">
+                  2w
+                </button>
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = 30" 
+                  title="Set to 1 month (30 days)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 border border-slate-700/70 transition-colors">
+                  1m
+                </button>
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = 180" 
+                  title="Set to 6 months (180 days)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 border border-slate-700/70 transition-colors hidden sm:inline-block">
+                  6m
+                </button>
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = 365" 
+                  title="Set to 1 year (365 days)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 hover:text-white text-slate-300 border border-slate-700/70 transition-colors hidden sm:inline-block">
+                  1y
+                </button>
+                <button 
+                  type="button" 
+                  @click="cat.defaultShelfLifeDays = null" 
+                  title="Clear preset (manual date entry only)"
+                  class="px-2 py-1 text-[11px] font-medium rounded-lg bg-slate-800/80 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-800/40 transition-colors">
+                  Clear
+                </button>
+              </div>
+
+              <!-- Number input -->
+              <div class="flex items-center gap-1.5 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 focus-within:border-amber-400/80 transition-colors">
+                <input 
+                  type="number" 
+                  min="1"
+                  max="3650"
+                  placeholder="None" 
+                  v-model.number="cat.defaultShelfLifeDays" 
+                  class="w-16 bg-transparent text-xs text-white font-mono text-right focus:outline-none" />
+                <span class="text-[11px] text-slate-500 font-medium">days</span>
+              </div>
+
+              <!-- Save button for this row -->
               <button 
                 type="button" 
                 @click="saveCategoryShelfLife(cat)" 
-                class="px-3 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-[11px] font-semibold transition-colors">
-                Save
+                title="Save shelf-life preset for this category"
+                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
+                <Save class="w-3.5 h-3.5 text-slate-400" />
+                <span>Save</span>
               </button>
             </div>
 
           </div>
         </div>
 
-        <div class="flex justify-end pt-2">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          <p class="text-xs text-slate-400">
+            Changes take effect immediately when adding new inventory items or batches.
+          </p>
           <button 
             type="button" 
             @click="saveAllCategories" 
-            class="px-5 py-2 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-sm flex items-center gap-2">
+            class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-sm flex items-center justify-center gap-2 transition-all">
             <Save class="w-4 h-4" />
             <span>Save All Category Presets</span>
           </button>
@@ -1252,7 +1311,8 @@ import { useRoute } from 'vue-router';
 import { 
   MapPin, Users, Link2, ShieldCheck, Plus, Edit2, Trash2, UserPlus, Save, X, Info, ExternalLink,
   ChevronDown, ChevronsUpDown, Bell, Clock, Sparkles, FolderTree, Mail, Send,
-  Refrigerator, Snowflake, Flame, Archive, LayoutGrid, Box, Home, Warehouse 
+  Refrigerator, Snowflake, Flame, Archive, LayoutGrid, Box, Home, Warehouse,
+  Apple, Milk, Beef, Croissant, Package, Wheat, CupSoda, Cookie, IceCream
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
@@ -1639,5 +1699,13 @@ function getIconComponent(iconName) {
     case 'Warehouse': return Warehouse;
     default: return LayoutGrid;
   }
+}
+
+const categoryIconMap = {
+  Apple, Milk, Beef, Croissant, Package, Wheat, Sparkles, CupSoda, Cookie, IceCream, Home
+};
+
+function getCategoryIconComponent(iconName) {
+  return categoryIconMap[iconName] || FolderTree;
 }
 </script>
