@@ -124,16 +124,50 @@
         class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-brand-500/10 to-slate-900 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs shadow-sm">
         <div class="flex items-center gap-2.5 text-emerald-300">
           <Sparkles class="w-4 h-4 text-amber-400 shrink-0" />
-          <span><strong>Sample Preview Mode:</strong> Showing recommended recipe cards with progressive green headers (35% to 100%), &ldquo;Uses Expiring Food&rdquo; badge, and centered Mealie action buttons.</span>
+          <span><strong>Sample Preview Mode:</strong> Showing recommended recipe cards with progressive green headers (20% to 100%), &ldquo;Uses Expiring Food&rdquo; badges, and 15-item pagination.</span>
         </div>
         <button @click="toggleSampleMode" class="text-xs text-slate-400 hover:text-white underline shrink-0">
           Exit Preview
         </button>
       </div>
 
-      <div v-if="recipes.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Top Pagination Info & Quick Nav (visible when over 15 recipes) -->
+      <div 
+        v-if="recipes.length > 15" 
+        class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 shadow-sm text-xs">
+        <div class="flex items-center gap-2 text-slate-300">
+          <UtensilsCrossed class="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>
+            Showing <strong class="text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</strong> of <strong class="text-white">{{ recipes.length }}</strong> matched recipes (15 per page)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2 self-end sm:self-auto">
+          <span class="text-slate-400 font-medium">Page {{ currentPage }} of {{ totalPages }}</span>
+          <div class="flex items-center gap-1">
+            <button
+              @click="goToPage(currentPage - 1)"
+              :disabled="currentPage === 1"
+              title="Previous page"
+              class="p-1.5 rounded-xl border text-xs transition-colors"
+              :class="currentPage === 1 ? 'opacity-30 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-white'">
+              <ChevronLeft class="w-3.5 h-3.5" />
+            </button>
+            <button
+              @click="goToPage(currentPage + 1)"
+              :disabled="currentPage === totalPages"
+              title="Next page"
+              class="p-1.5 rounded-xl border text-xs transition-colors"
+              :class="currentPage === totalPages ? 'opacity-30 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-white'">
+              <ChevronRight class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div ref="recipeGridRef" v-if="recipes.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div 
-          v-for="recipe in recipes" 
+          v-for="recipe in paginatedRecipes" 
           :key="recipe.id"
           class="bg-slate-900/90 border rounded-3xl overflow-hidden shadow-lg flex flex-col justify-between transition-all hover:border-slate-700"
           :class="recipe.savesExpiringFood ? 'border-amber-500/40 bg-gradient-to-br from-amber-950/10 to-slate-900/90' : 'border-slate-800'">
@@ -253,6 +287,48 @@
             </div>
 
           </div>
+        </div>
+      </div>
+
+      <!-- Bottom Pagination Bar (when over 15 recipes) -->
+      <div 
+        v-if="recipes.length > 15" 
+        class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
+        <p class="text-xs text-slate-400">
+          Showing <span class="font-bold text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</span> of <span class="font-bold text-white">{{ recipes.length }}</span> matches (15 per page)
+        </p>
+
+        <div class="flex items-center gap-1.5 flex-wrap justify-center">
+          <button
+            @click="goToPage(currentPage - 1)"
+            :disabled="currentPage === 1"
+            class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all"
+            :class="currentPage === 1 ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:text-white'">
+            <ChevronLeft class="w-3.5 h-3.5" />
+            <span>Prev</span>
+          </button>
+
+          <template v-for="(p, idx) in visiblePages" :key="idx">
+            <span v-if="p === '...'" class="px-2 text-xs text-slate-500 font-mono">...</span>
+            <button
+              v-else
+              @click="goToPage(p)"
+              class="w-8 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center border"
+              :class="currentPage === p 
+                ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-950/40' 
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700 hover:text-white'">
+              {{ p }}
+            </button>
+          </template>
+
+          <button
+            @click="goToPage(currentPage + 1)"
+            :disabled="currentPage === totalPages"
+            class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all"
+            :class="currentPage === totalPages ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:text-white'">
+            <span>Next</span>
+            <ChevronRight class="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -537,10 +613,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { 
   ChefHat, UtensilsCrossed, Sparkles, Check, CheckCircle2, ShoppingCart, RefreshCw,
-  Clock, ArrowRight, X, Settings, ExternalLink
+  Clock, ArrowRight, X, Settings, ExternalLink, ChevronLeft, ChevronRight
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
@@ -556,6 +632,10 @@ const mealieBaseUrl = ref('');
 const hasMealieConfigured = ref(false);
 const hasLlmConfigured = ref(false);
 const isSampleMode = ref(false);
+
+const recipeGridRef = ref(null);
+const currentPage = ref(1);
+const pageSize = 15;
 
 const SAMPLE_RECIPES = [
   {
@@ -573,6 +653,34 @@ const SAMPLE_RECIPES = [
     recipeUrl: 'http://localhost:9000/recipes/creamy-tuscan-garlic-chicken'
   },
   {
+    id: 'sample-salmon-dill',
+    name: 'Pan-Seared Salmon with Lemon Dill Butter',
+    slug: 'pan-seared-salmon-with-lemon-dill-butter',
+    description: 'Crispy skin salmon fillets draped in a velvety golden lemon herb butter sauce.',
+    prepTime: 'PT10M',
+    cookTime: 'PT12M',
+    matchPercentage: 95,
+    savesExpiringFood: true,
+    matchedIngredients: ['Salmon Fillets', 'Fresh Dill', 'Lemon', 'Butter'],
+    missingIngredients: ['Capers'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/pan-seared-salmon-with-lemon-dill-butter'
+  },
+  {
+    id: 'sample-sheet-fajitas',
+    name: 'Sizzling Sheet-Pan Chicken Fajitas',
+    slug: 'sizzling-sheet-pan-chicken-fajitas',
+    description: 'Tender marinated chicken strips roasted with bell peppers, sweet red onions, and warm Mexican spices.',
+    prepTime: 'PT15M',
+    cookTime: 'PT25M',
+    matchPercentage: 90,
+    savesExpiringFood: true,
+    matchedIngredients: ['Chicken Breast', 'Bell Peppers', 'Red Onion', 'Lime', 'Cumin'],
+    missingIngredients: ['Flour Tortillas'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/sizzling-sheet-pan-chicken-fajitas'
+  },
+  {
     id: 'sample-pesto-pasta',
     name: 'Fresh Garden Basil Pesto Penne',
     slug: 'fresh-garden-basil-pesto-penne',
@@ -585,6 +693,34 @@ const SAMPLE_RECIPES = [
     missingIngredients: ['Pine Nuts'],
     source: 'Mealie',
     recipeUrl: 'http://localhost:9000/recipes/fresh-garden-basil-pesto-penne'
+  },
+  {
+    id: 'sample-stuffed-shells',
+    name: 'Spinach & Ricotta Stuffed Jumbo Shells',
+    slug: 'spinach-and-ricotta-stuffed-jumbo-shells',
+    description: 'Jumbo pasta shells loaded with herb ricotta, baby spinach, and bubbling mozzarella in marinara.',
+    prepTime: 'PT20M',
+    cookTime: 'PT30M',
+    matchPercentage: 78,
+    savesExpiringFood: true,
+    matchedIngredients: ['Jumbo Shells', 'Ricotta Cheese', 'Baby Spinach', 'Mozzarella'],
+    missingIngredients: ['Marinara Sauce'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/spinach-and-ricotta-stuffed-jumbo-shells'
+  },
+  {
+    id: 'sample-potato-chowder',
+    name: 'Smoky Bacon & Cheddar Potato Chowder',
+    slug: 'smoky-bacon-and-cheddar-potato-chowder',
+    description: 'Creamy rustic potato chowder garnished with crisp applewood bacon crumbles and chives.',
+    prepTime: 'PT15M',
+    cookTime: 'PT35M',
+    matchPercentage: 75,
+    savesExpiringFood: true,
+    matchedIngredients: ['Yukon Gold Potatoes', 'Bacon', 'Sharp Cheddar', 'Milk'],
+    missingIngredients: ['Green Onions'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/smoky-bacon-and-cheddar-potato-chowder'
   },
   {
     id: 'sample-beef-tacos',
@@ -601,6 +737,118 @@ const SAMPLE_RECIPES = [
     recipeUrl: 'http://localhost:9000/recipes/classic-skillet-beef-tacos'
   },
   {
+    id: 'sample-quinoa-bowl',
+    name: 'Mediterranean Quinoa & Chickpea Power Bowl',
+    slug: 'mediterranean-quinoa-and-chickpea-power-bowl',
+    description: 'Nutrient-rich fluffy quinoa bowl loaded with spiced chickpeas, cucumbers, kalamata olives, and tahini drizzle.',
+    prepTime: 'PT15M',
+    cookTime: 'PT15M',
+    matchPercentage: 58,
+    savesExpiringFood: false,
+    matchedIngredients: ['Quinoa', 'Canned Chickpeas', 'Cucumber', 'Olive Oil'],
+    missingIngredients: ['Feta Cheese', 'Tahini'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/mediterranean-quinoa-and-chickpea-power-bowl'
+  },
+  {
+    id: 'sample-tofu-bowl',
+    name: 'Crispy Sesame Garlic Tofu Rice Bowl',
+    slug: 'crispy-sesame-garlic-tofu-rice-bowl',
+    description: 'Golden pan-crisped tofu cubes glazed in ginger soy glaze over warm jasmine rice.',
+    prepTime: 'PT15M',
+    cookTime: 'PT20M',
+    matchPercentage: 55,
+    savesExpiringFood: false,
+    matchedIngredients: ['Extra Firm Tofu', 'Jasmine Rice', 'Soy Sauce', 'Sesame Oil'],
+    missingIngredients: ['Green Onions', 'Sesame Seeds'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/crispy-sesame-garlic-tofu-rice-bowl'
+  },
+  {
+    id: 'sample-fried-rice',
+    name: 'Classic Vegetable & Egg Fried Rice',
+    slug: 'classic-vegetable-and-egg-fried-rice',
+    description: 'Wok-tossed chilled rice with scrambled eggs, sweet peas, diced carrots, and savory toasted sesame oil.',
+    prepTime: 'PT10M',
+    cookTime: 'PT10M',
+    matchPercentage: 52,
+    savesExpiringFood: false,
+    matchedIngredients: ['Cooked Rice', 'Eggs', 'Frozen Peas', 'Soy Sauce'],
+    missingIngredients: ['Sesame Seeds'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/classic-vegetable-and-egg-fried-rice'
+  },
+  {
+    id: 'sample-beef-chili',
+    name: 'Slow-Cooked Three-Bean Beef Chili',
+    slug: 'slow-cooked-three-bean-beef-chili',
+    description: 'Thick, hearty chili simmered with ground chuck, kidney beans, crushed tomatoes, and smoked paprika.',
+    prepTime: 'PT20M',
+    cookTime: 'PT90M',
+    matchPercentage: 50,
+    savesExpiringFood: false,
+    matchedIngredients: ['Ground Chuck', 'Kidney Beans', 'Crushed Tomatoes', 'Onions'],
+    missingIngredients: ['Chili Powder', 'Cheddar'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/slow-cooked-three-bean-beef-chili'
+  },
+  {
+    id: 'sample-chicken-noodle',
+    name: 'Homestyle Chicken Noodle Soup',
+    slug: 'homestyle-chicken-noodle-soup',
+    description: 'Soothing golden chicken broth packed with wide egg noodles, tender chicken chunks, and aromatic celery.',
+    prepTime: 'PT15M',
+    cookTime: 'PT30M',
+    matchPercentage: 48,
+    savesExpiringFood: false,
+    matchedIngredients: ['Chicken Thighs', 'Egg Noodles', 'Carrots', 'Garlic'],
+    missingIngredients: ['Celery Stalks', 'Chicken Broth'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/homestyle-chicken-noodle-soup'
+  },
+  {
+    id: 'sample-tomato-bisque',
+    name: 'Silky Roasted Tomato & Basil Bisque',
+    slug: 'silky-roasted-tomato-and-basil-bisque',
+    description: 'Smooth, roasted Roma tomato bisque finished with sweet basil cream and cracked black pepper.',
+    prepTime: 'PT15M',
+    cookTime: 'PT30M',
+    matchPercentage: 45,
+    savesExpiringFood: false,
+    matchedIngredients: ['Canned Tomatoes', 'Garlic', 'Heavy Cream', 'Olive Oil'],
+    missingIngredients: ['Fresh Basil Leaves', 'Vegetable Stock'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/silky-roasted-tomato-and-basil-bisque'
+  },
+  {
+    id: 'sample-butternut-risotto',
+    name: 'Creamy Roasted Butternut Squash Risotto',
+    slug: 'creamy-roasted-butternut-squash-risotto',
+    description: 'Arborio rice slowly infused with rich stock, roasted caramelized squash purée, and nutty parmesan.',
+    prepTime: 'PT20M',
+    cookTime: 'PT35M',
+    matchPercentage: 42,
+    savesExpiringFood: false,
+    matchedIngredients: ['Arborio Rice', 'Onion', 'Parmesan', 'Butter'],
+    missingIngredients: ['Butternut Squash', 'White Wine'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/creamy-roasted-butternut-squash-risotto'
+  },
+  {
+    id: 'sample-garlic-shrimp',
+    name: 'Garlic Butter Shrimp Spaghetti',
+    slug: 'garlic-butter-shrimp-spaghetti',
+    description: 'Juicy shrimp sautéed in white wine garlic butter tossed with al dente spaghetti and parsley.',
+    prepTime: 'PT10M',
+    cookTime: 'PT15M',
+    matchPercentage: 40,
+    savesExpiringFood: false,
+    matchedIngredients: ['Spaghetti', 'Butter', 'Garlic', 'Olive Oil'],
+    missingIngredients: ['Raw Shrimp', 'Dry White Wine'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/garlic-butter-shrimp-spaghetti'
+  },
+  {
     id: 'sample-minestrone',
     name: 'Rustic Tuscan Vegetable Minestrone',
     slug: 'rustic-tuscan-vegetable-minestrone',
@@ -613,6 +861,62 @@ const SAMPLE_RECIPES = [
     missingIngredients: ['Cannellini Beans', 'Celery', 'Zucchini', 'Vegetable Broth'],
     source: 'Mealie',
     recipeUrl: 'http://localhost:9000/recipes/rustic-tuscan-vegetable-minestrone'
+  },
+  {
+    id: 'sample-bbq-pork',
+    name: 'Slow-Cooked BBQ Pulled Pork Bowls',
+    slug: 'slow-cooked-bbq-pulled-pork-bowls',
+    description: 'Tender shredded pork shoulder coated in tangy smoky barbecue sauce served over brown rice.',
+    prepTime: 'PT15M',
+    cookTime: 'PT120M',
+    matchPercentage: 30,
+    savesExpiringFood: false,
+    matchedIngredients: ['Brown Rice', 'Brown Sugar'],
+    missingIngredients: ['Pork Shoulder', 'BBQ Sauce', 'Apple Cider Vinegar'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/slow-cooked-bbq-pulled-pork-bowls'
+  },
+  {
+    id: 'sample-thai-curry',
+    name: 'Aromatic Thai Red Curry with Sweet Potato',
+    slug: 'aromatic-thai-red-curry-with-sweet-potato',
+    description: 'Creamy coconut red curry sauce brimming with sweet potato cubes, bell peppers, and fresh cilantro.',
+    prepTime: 'PT15M',
+    cookTime: 'PT25M',
+    matchPercentage: 28,
+    savesExpiringFood: false,
+    matchedIngredients: ['Sweet Potato', 'Coconut Milk'],
+    missingIngredients: ['Red Curry Paste', 'Bamboo Shoots', 'Cilantro'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/aromatic-thai-red-curry-with-sweet-potato'
+  },
+  {
+    id: 'sample-french-onion',
+    name: 'Caramelized French Onion Soup',
+    slug: 'caramelized-french-onion-soup',
+    description: 'Deeply caramelized yellow onions in rich beef thyme broth topped with toasted baguette and Gruyère.',
+    prepTime: 'PT25M',
+    cookTime: 'PT50M',
+    matchPercentage: 25,
+    savesExpiringFood: false,
+    matchedIngredients: ['Yellow Onions', 'Butter', 'Thyme'],
+    missingIngredients: ['Beef Broth', 'Gruyere Cheese', 'French Baguette'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/caramelized-french-onion-soup'
+  },
+  {
+    id: 'sample-lo-mein',
+    name: 'Sesame Ginger Vegetable Lo Mein',
+    slug: 'sesame-ginger-vegetable-lo-mein',
+    description: 'Stir-fried egg noodles with crisp shredded cabbage, carrots, and sweet bell peppers in a savory dark soy sauce.',
+    prepTime: 'PT15M',
+    cookTime: 'PT10M',
+    matchPercentage: 20,
+    savesExpiringFood: false,
+    matchedIngredients: ['Carrots', 'Soy Sauce'],
+    missingIngredients: ['Lo Mein Noodles', 'Napa Cabbage', 'Oyster Sauce'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/sesame-ginger-vegetable-lo-mein'
   }
 ];
 
@@ -620,6 +924,39 @@ const recipes = ref([]);
 const pendingMeals = ref([]);
 const pantryItems = ref([]);
 const generatedRecipe = ref(null);
+
+const totalPages = computed(() => Math.ceil(recipes.value.length / pageSize) || 1);
+
+const paginatedRecipes = computed(() => {
+  if (recipes.value.length <= pageSize) {
+    return recipes.value;
+  }
+  const start = (currentPage.value - 1) * pageSize;
+  return recipes.value.slice(start, start + pageSize);
+});
+
+const visiblePages = computed(() => {
+  const total = totalPages.value;
+  const current = currentPage.value;
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', total];
+  } else if (current >= total - 3) {
+    return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+  } else {
+    return [1, '...', current - 1, current, current + 1, '...', total];
+  }
+});
+
+function goToPage(page) {
+  if (page < 1 || page > totalPages.value) return;
+  currentPage.value = page;
+  if (recipeGridRef.value) {
+    recipeGridRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
 
 async function loadSettings() {
   try {
@@ -642,6 +979,7 @@ async function loadSettings() {
 
 async function loadRecipes(force = false) {
   isLoading.value = true;
+  currentPage.value = 1;
   try {
     const res = await api.getRecipeMatches(force ? { refresh: true } : {});
     const data = res.data || [];
@@ -663,6 +1001,7 @@ async function loadRecipes(force = false) {
 }
 
 function toggleSampleMode() {
+  currentPage.value = 1;
   if (isSampleMode.value) {
     isSampleMode.value = false;
     recipes.value = [];
