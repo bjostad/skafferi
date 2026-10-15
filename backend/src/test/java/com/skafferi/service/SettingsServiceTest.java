@@ -48,6 +48,7 @@ public class SettingsServiceTest {
                 current.bringAutoSync(),
                 current.mealieBaseUrl(),
                 current.mealieFrontendUrl(),
+                current.mealieHousehold(),
                 current.mealieApiToken(),
                 current.mealieAutoDeduct(),
                 current.krogerClientId(),
@@ -105,6 +106,7 @@ public class SettingsServiceTest {
                 current.bringAutoSync(),
                 current.mealieBaseUrl(),
                 current.mealieFrontendUrl(),
+                current.mealieHousehold(),
                 current.mealieApiToken(),
                 current.mealieAutoDeduct(),
                 current.krogerClientId(),
@@ -156,6 +158,7 @@ public class SettingsServiceTest {
                 current.bringAutoSync(),
                 "http://mealie:9000",
                 "https://mealie.ballardplex.com",
+                "seattle",
                 "sample-token",
                 current.mealieAutoDeduct(),
                 current.krogerClientId(),
@@ -194,10 +197,12 @@ public class SettingsServiceTest {
         SettingsDto saved = settingsService.saveSettings(updated);
         assertEquals("http://mealie:9000", saved.mealieBaseUrl());
         assertEquals("https://mealie.ballardplex.com", saved.mealieFrontendUrl());
+        assertEquals("seattle", saved.mealieHousehold());
         assertTrue(settingsService.hasMealieConnection());
 
         SettingsDto reRead = settingsService.getSettings();
         assertEquals("http://mealie:9000", reRead.mealieBaseUrl());
         assertEquals("https://mealie.ballardplex.com", reRead.mealieFrontendUrl());
+        assertEquals("seattle", reRead.mealieHousehold());
     }
 }

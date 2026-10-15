@@ -44,6 +44,7 @@ public class RecipeService {
     private final Map<String, CachedMealieRecipe> recipeCache = new ConcurrentHashMap<>();
     private final AtomicBoolean isBackgroundSyncRunning = new AtomicBoolean(false);
     private volatile long lastMealieScanTime = 0;
+    private volatile String autoDetectedMealieGroupSlug = null;
     private static final long SCAN_COOLDOWN_MS = 5 * 60 * 1000L; // 5 minutes between full scans unless forced
 
     private record CachedMealieRecipe(long timestamp, String dateUpdated, Map<String, Object> recipeData) {}
@@ -120,12 +121,14 @@ public class RecipeService {
 
         SettingsDto settings = null;
         String publicBaseUrl = null;
+        String household = null;
         try {
             settings = settingsService.getRawSettings();
             if (settings != null) {
                 publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
-                        ? settings.mealieFrontendUrl().trim().replaceAll("/+$", "")
-                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim().replaceAll("/+$", "") : null);
+                        ? settings.mealieFrontendUrl().trim()
+                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim() : null);
+                household = resolveMealieHousehold(settings);
             }
         } catch (Exception e) {
             // ignore
@@ -170,7 +173,7 @@ public class RecipeService {
             if (publicBaseUrl != null) {
                 String slug = (String) r.get("slug");
                 if (slug != null && !slug.isBlank()) {
-                    result.put("recipeUrl", publicBaseUrl + "/recipes/" + slug);
+                    result.put("recipeUrl", buildMealieRecipeUrl(publicBaseUrl, household, slug));
                 }
             }
             result.put("matchPercentage", matchPercent);
@@ -505,8 +508,9 @@ public class RecipeService {
                             String publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
                                     ? settings.mealieFrontendUrl().trim()
                                     : settings.mealieBaseUrl();
+                            String household = resolveMealieHousehold(settings);
                             if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
-                                localRecipe.put("recipeUrl", publicBaseUrl.replaceAll("/+$", "") + "/recipes/" + slug);
+                                localRecipe.put("recipeUrl", buildMealieRecipeUrl(publicBaseUrl, household, slug));
                             }
                             recipeMapByName.put(key, localRecipe);
                         }
@@ -530,6 +534,19 @@ public class RecipeService {
         if (url == null || url.isBlank() || token == null || token.isBlank()) {
             return Collections.emptyList();
         }
+
+        if (autoDetectedMealieGroupSlug == null && (settings.mealieHousehold() == null || settings.mealieHousehold().isBlank())) {
+            try {
+                String detected = fetchMealieGroupSlug(url, token);
+                if (detected != null && !detected.isBlank()) {
+                    autoDetectedMealieGroupSlug = detected;
+                    log.info("Auto-detected Mealie household/group slug: '{}'", autoDetectedMealieGroupSlug);
+                }
+            } catch (Exception e) {
+                log.debug("Could not auto-detect Mealie household: {}", e.getMessage());
+            }
+        }
+        String household = resolveMealieHousehold(settings);
 
         long now = System.currentTimeMillis();
 
@@ -631,7 +648,7 @@ public class RecipeService {
                 // Check if summary node itself contains ingredients
                 List<String> summaryIngs = extractIngredientsFromRecipeNode(summary);
                 if (!summaryIngs.isEmpty()) {
-                    Map<String, Object> rMap = buildRecipeMapFromNode(summary, summaryIngs, publicBaseUrl);
+                    Map<String, Object> rMap = buildRecipeMapFromNode(summary, summaryIngs, publicBaseUrl, household);
                     recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, rMap));
                     persistToDb(rMap, dateUpdated);
                     readyRecipes.add(rMap);
@@ -675,7 +692,7 @@ public class RecipeService {
                         rateLimiter.acquire();
                         try {
                             String dateUpdated = extractDateUpdated(summary);
-                            Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl);
+                            Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl, household);
                             if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
                                 String slug = (String) detail.get("slug");
                                 recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, detail));
@@ -730,7 +747,7 @@ public class RecipeService {
                                 break;
                             }
                             try {
-                                Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl);
+                                Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl, household);
                                 if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
                                     recipeCache.put(slug, new CachedMealieRecipe(System.currentTimeMillis(), dateUpdated, detail));
                                     persistToDb(detail, dateUpdated);
@@ -807,7 +824,7 @@ public class RecipeService {
         return null;
     }
 
-    private Map<String, Object> fetchRecipeDetailWithRetry(String url, String token, JsonNode summary, String dateUpdated, String publicBaseUrl) {
+    private Map<String, Object> fetchRecipeDetailWithRetry(String url, String token, JsonNode summary, String dateUpdated, String publicBaseUrl, String household) {
         String id = summary.hasNonNull("id") ? summary.get("id").asText() : UUID.randomUUID().toString();
         String name = summary.hasNonNull("name") ? summary.get("name").asText() : "Untitled Recipe";
         String desc = summary.hasNonNull("description") ? summary.get("description").asText() : "";
@@ -885,7 +902,7 @@ public class RecipeService {
         recipeMap.put("ingredients", ings);
         String linkUrl = (publicBaseUrl != null && !publicBaseUrl.isBlank()) ? publicBaseUrl : url;
         if (linkUrl != null && !linkUrl.isBlank()) {
-            recipeMap.put("recipeUrl", linkUrl.replaceAll("/+$", "") + "/recipes/" + slug);
+            recipeMap.put("recipeUrl", buildMealieRecipeUrl(linkUrl, household, slug));
         }
         if (prepTime != null && !prepTime.isBlank()) {
             recipeMap.put("prepTime", prepTime);
@@ -897,7 +914,7 @@ public class RecipeService {
         return recipeMap;
     }
 
-    private Map<String, Object> buildRecipeMapFromNode(JsonNode node, List<String> ings, String url) {
+    private Map<String, Object> buildRecipeMapFromNode(JsonNode node, List<String> ings, String url, String household) {
         String id = node.hasNonNull("id") ? node.get("id").asText() : UUID.randomUUID().toString();
         String name = node.hasNonNull("name") ? node.get("name").asText() : "Untitled Recipe";
         String desc = node.hasNonNull("description") ? node.get("description").asText() : "";
@@ -913,7 +930,7 @@ public class RecipeService {
         recipeMap.put("slug", slug);
         recipeMap.put("ingredients", ings);
         if (url != null && !url.isBlank()) {
-            recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
+            recipeMap.put("recipeUrl", buildMealieRecipeUrl(url, household, slug));
         }
         if (prepTime != null && !prepTime.isBlank()) {
             recipeMap.put("prepTime", prepTime);
@@ -938,10 +955,11 @@ public class RecipeService {
             SettingsDto settings = settingsService.getRawSettings();
             if (settings != null) {
                 String publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
-                        ? settings.mealieFrontendUrl().trim().replaceAll("/+$", "")
-                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim().replaceAll("/+$", "") : null);
+                        ? settings.mealieFrontendUrl().trim()
+                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim() : null);
+                String household = resolveMealieHousehold(settings);
                 if (publicBaseUrl != null && cr.getSlug() != null && !cr.getSlug().isBlank()) {
-                    recipeUrl = publicBaseUrl + "/recipes/" + cr.getSlug();
+                    recipeUrl = buildMealieRecipeUrl(publicBaseUrl, household, cr.getSlug());
                 }
             }
         } catch (Exception e) {
@@ -1078,5 +1096,75 @@ public class RecipeService {
                 "instructions", instructions,
                 "chefTips", "Pro tip: Keep vegetable trims and herb stems in a freezer bag to simmer rich homemade vegetable stock later!"
         );
+    }
+
+    public static String buildMealieRecipeUrl(String base, String household, String slug) {
+        if (base == null || base.isBlank() || slug == null || slug.isBlank()) {
+            return "";
+        }
+        String cleanBase = base.trim().replaceAll("/+$", "");
+        String cleanSlug = slug.trim().replaceAll("^/+", "");
+        String cleanHousehold = household != null ? household.trim().replaceAll("^/+|/+$", "") : "";
+
+        if (cleanBase.matches(".*(?i)/g/[^/]+/r$")) {
+            return cleanBase + "/" + cleanSlug;
+        }
+        if (cleanBase.matches(".*(?i)/g/[^/]+$")) {
+            return cleanBase + "/r/" + cleanSlug;
+        }
+        if (!cleanHousehold.isEmpty()) {
+            return cleanBase + "/g/" + cleanHousehold + "/r/" + cleanSlug;
+        }
+        return cleanBase + "/r/" + cleanSlug;
+    }
+
+    private String resolveMealieHousehold(SettingsDto settings) {
+        if (settings == null) return null;
+        if (settings.mealieHousehold() != null && !settings.mealieHousehold().isBlank()) {
+            return settings.mealieHousehold().trim();
+        }
+        if (autoDetectedMealieGroupSlug != null && !autoDetectedMealieGroupSlug.isBlank()) {
+            return autoDetectedMealieGroupSlug.trim();
+        }
+        return null;
+    }
+
+    private String fetchMealieGroupSlug(String url, String token) {
+        if (url == null || url.isBlank() || token == null || token.isBlank()) return null;
+        try {
+            String json = restClient.get()
+                    .uri(url.replaceAll("/+$", "") + "/api/groups/self")
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+            if (json != null && !json.isBlank()) {
+                JsonNode node = objectMapper.readTree(json);
+                if (node.hasNonNull("slug") && !node.get("slug").asText().isBlank()) {
+                    return node.get("slug").asText().trim();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to query /api/groups/self: {}", e.getMessage());
+        }
+
+        try {
+            String json = restClient.get()
+                    .uri(url.replaceAll("/+$", "") + "/api/users/self")
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+            if (json != null && !json.isBlank()) {
+                JsonNode node = objectMapper.readTree(json);
+                if (node.hasNonNull("groupSlug") && !node.get("groupSlug").asText().isBlank()) {
+                    return node.get("groupSlug").asText().trim();
+                }
+                if (node.hasNonNull("group_slug") && !node.get("group_slug").asText().isBlank()) {
+                    return node.get("group_slug").asText().trim();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to query /api/users/self: {}", e.getMessage());
+        }
+        return null;
     }
 }

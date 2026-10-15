@@ -166,6 +166,7 @@ class RecipeServiceTest {
         SettingsDto settingsDto = Mockito.mock(SettingsDto.class);
         when(settingsDto.mealieBaseUrl()).thenReturn("http://mealie:9000");
         when(settingsDto.mealieFrontendUrl()).thenReturn("https://mealie.ballardplex.com");
+        when(settingsDto.mealieHousehold()).thenReturn("seattle");
         when(settingsService.getRawSettings()).thenReturn(settingsDto);
         when(settingsService.hasMealieConnection()).thenReturn(false);
 
@@ -187,7 +188,28 @@ class RecipeServiceTest {
         assertNotNull(matches);
         assertEquals(1, matches.size());
         Map<String, Object> match = matches.get(0);
-        // Ensure the public frontend URL is used for recipeUrl instead of the internal docker URL
-        assertEquals("https://mealie.ballardplex.com/recipes/tacos-de-asada", match.get("recipeUrl"));
+        // Ensure the public frontend URL is used with household routing for recipeUrl instead of the internal docker URL
+        assertEquals("https://mealie.ballardplex.com/g/seattle/r/tacos-de-asada", match.get("recipeUrl"));
+    }
+
+    @Test
+    void testBuildMealieRecipeUrlVariations() {
+        assertEquals("https://mealie.ballardplex.com/g/seattle/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com", "seattle", "broccoli-cheese-soup"));
+
+        assertEquals("https://mealie.ballardplex.com/g/seattle/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com/", "/seattle/", "/broccoli-cheese-soup"));
+
+        assertEquals("https://mealie.ballardplex.com/g/seattle/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com/g/seattle", null, "broccoli-cheese-soup"));
+
+        assertEquals("https://mealie.ballardplex.com/g/seattle/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com/g/seattle/r", null, "broccoli-cheese-soup"));
+
+        assertEquals("https://mealie.ballardplex.com/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com", null, "broccoli-cheese-soup"));
+
+        assertEquals("https://mealie.ballardplex.com/r/broccoli-cheese-soup",
+                RecipeService.buildMealieRecipeUrl("https://mealie.ballardplex.com", "", "broccoli-cheese-soup"));
     }
 }

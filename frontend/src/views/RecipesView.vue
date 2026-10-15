@@ -630,6 +630,7 @@ const isReconciling = ref(false);
 
 const mealieBaseUrl = ref('');
 const mealieFrontendUrl = ref('');
+const mealieHousehold = ref('');
 const hasMealieConfigured = ref(false);
 const hasLlmConfigured = ref(false);
 const isSampleMode = ref(false);
@@ -965,6 +966,7 @@ async function loadSettings() {
     const data = res.data || {};
     mealieBaseUrl.value = data.mealieBaseUrl || '';
     mealieFrontendUrl.value = data.mealieFrontendUrl || '';
+    mealieHousehold.value = data.mealieHousehold || '';
     hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
     hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
 
@@ -1177,12 +1179,31 @@ async function addMissingToShopping(items) {
   }
 }
 
+function buildMealieRecipeUrl(base, household, slug) {
+  if (!base || !slug) return '';
+  const cleanBase = base.trim().replace(/\/+$/, '');
+  const cleanSlug = slug.trim().replace(/^\/+/, '');
+  const cleanHousehold = (household || '').trim().replace(/^\/+|\/+$/g, '');
+
+  if (/\/g\/[^/]+\/r$/i.test(cleanBase)) {
+    return `${cleanBase}/${cleanSlug}`;
+  }
+  if (/\/g\/[^/]+$/i.test(cleanBase)) {
+    return `${cleanBase}/r/${cleanSlug}`;
+  }
+  if (cleanHousehold) {
+    return `${cleanBase}/g/${cleanHousehold}/r/${cleanSlug}`;
+  }
+  return `${cleanBase}/r/${cleanSlug}`;
+}
+
 function getMealieRecipeUrl(recipe) {
   if (!recipe) return '';
-  const publicBase = (mealieFrontendUrl.value || mealieBaseUrl.value || '').replace(/\/+$/, '');
+  const publicBase = (mealieFrontendUrl.value || mealieBaseUrl.value || '').trim().replace(/\/+$/, '');
   const identifier = recipe.slug || recipe.id;
+
   if (publicBase && identifier) {
-    return `${publicBase}/recipes/${identifier}`;
+    return buildMealieRecipeUrl(publicBase, mealieHousehold.value, identifier);
   }
   if (recipe.recipeUrl && typeof recipe.recipeUrl === 'string' && recipe.recipeUrl.startsWith('http')) {
     return recipe.recipeUrl;

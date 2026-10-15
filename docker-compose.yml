@@ -18,9 +18,10 @@ services:
       # - BRING_EMAIL=user@example.com
       # - BRING_PASSWORD=secret
       # - BRING_AUTO_SYNC=true
-      # Optional: Mealie URLs & Token
+      # Optional: Mealie URLs, Household & Token
       # - MEALIE_BASE_URL=http://mealie:9000
       # - MEALIE_FRONTEND_URL=https://mealie.example.com
+      # - MEALIE_HOUSEHOLD=seattle
       # - MEALIE_API_TOKEN=your_token
       # Optional: Kroger Developer API
       # - KROGER_CLIENT_ID=your_id

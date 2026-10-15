@@ -31,6 +31,7 @@ skafferi:
     mealie:
       base-url: ${MEALIE_BASE_URL:}
       frontend-url: ${MEALIE_FRONTEND_URL:}
+      household: ${MEALIE_HOUSEHOLD:}
       api-token: ${MEALIE_API_TOKEN:}
     kroger:
       client-id: ${KROGER_CLIENT_ID:}

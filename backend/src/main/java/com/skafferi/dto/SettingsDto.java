@@ -16,6 +16,7 @@ public record SettingsDto(
         // Mealie
         String mealieBaseUrl,
         String mealieFrontendUrl,
+        String mealieHousehold,
         String mealieApiToken,
         Boolean mealieAutoDeduct,
 
