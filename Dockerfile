@@ -1,7 +1,7 @@
 # ==========================================
 # Stage 1: Build Vue 3 Frontend
 # ==========================================
-FROM node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -13,7 +13,7 @@ RUN npm run build
 # ==========================================
 # Stage 2: Build Spring Boot Backend
 # ==========================================
-FROM maven:3.9-eclipse-temurin-21-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-21-alpine AS backend-builder
 WORKDIR /app/backend
 
 COPY backend/pom.xml .
