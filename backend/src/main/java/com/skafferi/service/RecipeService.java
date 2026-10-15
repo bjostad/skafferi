@@ -1131,9 +1131,12 @@ public class RecipeService {
 
     private String fetchMealieGroupSlug(String url, String token) {
         if (url == null || url.isBlank() || token == null || token.isBlank()) return null;
+        String baseUrl = url.replaceAll("/+$", "");
+
+        // 1. Try modern Mealie household endpoint (/api/households/self)
         try {
             String json = restClient.get()
-                    .uri(url.replaceAll("/+$", "") + "/api/groups/self")
+                    .uri(baseUrl + "/api/households/self")
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
                     .body(String.class);
@@ -1144,17 +1147,53 @@ public class RecipeService {
                 }
             }
         } catch (Exception e) {
-            log.debug("Failed to query /api/groups/self: {}", e.getMessage());
+            log.debug("Failed to query /api/households/self: {}", e.getMessage());
         }
 
+        // 2. Try groups/self
         try {
             String json = restClient.get()
-                    .uri(url.replaceAll("/+$", "") + "/api/users/self")
+                    .uri(baseUrl + "/api/groups/self")
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
                     .body(String.class);
             if (json != null && !json.isBlank()) {
                 JsonNode node = objectMapper.readTree(json);
+                if (node.hasNonNull("slug") && !node.get("slug").asText().isBlank()) {
+                    return node.get("slug").asText().trim();
+                }
+                if (node.has("households") && node.get("households").isArray() && !node.get("households").isEmpty()) {
+                    JsonNode firstHh = node.get("households").get(0);
+                    if (firstHh.hasNonNull("slug") && !firstHh.get("slug").asText().isBlank()) {
+                        return firstHh.get("slug").asText().trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to query /api/groups/self: {}", e.getMessage());
+        }
+
+        // 3. Try /api/users/self
+        try {
+            String json = restClient.get()
+                    .uri(baseUrl + "/api/users/self")
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+            if (json != null && !json.isBlank()) {
+                JsonNode node = objectMapper.readTree(json);
+                if (node.path("household").hasNonNull("slug") && !node.path("household").path("slug").asText().isBlank()) {
+                    return node.path("household").path("slug").asText().trim();
+                }
+                if (node.hasNonNull("householdSlug") && !node.get("householdSlug").asText().isBlank()) {
+                    return node.get("householdSlug").asText().trim();
+                }
+                if (node.hasNonNull("household_slug") && !node.get("household_slug").asText().isBlank()) {
+                    return node.get("household_slug").asText().trim();
+                }
+                if (node.path("group").hasNonNull("slug") && !node.path("group").path("slug").asText().isBlank()) {
+                    return node.path("group").path("slug").asText().trim();
+                }
                 if (node.hasNonNull("groupSlug") && !node.get("groupSlug").asText().isBlank()) {
                     return node.get("groupSlug").asText().trim();
                 }
@@ -1165,6 +1204,28 @@ public class RecipeService {
         } catch (Exception e) {
             log.debug("Failed to query /api/users/self: {}", e.getMessage());
         }
+
+        // 4. Try /api/groups/households
+        try {
+            String json = restClient.get()
+                    .uri(baseUrl + "/api/groups/households")
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+            if (json != null && !json.isBlank()) {
+                JsonNode node = objectMapper.readTree(json);
+                JsonNode items = node.has("items") ? node.get("items") : node;
+                if (items.isArray() && !items.isEmpty()) {
+                    JsonNode first = items.get(0);
+                    if (first.hasNonNull("slug") && !first.get("slug").asText().isBlank()) {
+                        return first.get("slug").asText().trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to query /api/groups/households: {}", e.getMessage());
+        }
+
         return null;
     }
 }

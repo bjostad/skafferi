@@ -1202,11 +1202,26 @@ function getMealieRecipeUrl(recipe) {
   const publicBase = (mealieFrontendUrl.value || mealieBaseUrl.value || '').trim().replace(/\/+$/, '');
   const identifier = recipe.slug || recipe.id;
 
-  if (publicBase && identifier) {
+  // 1. If backend already computed a recipeUrl with /g/{household}/r/{slug}, preserve it!
+  if (recipe.recipeUrl && typeof recipe.recipeUrl === 'string' && recipe.recipeUrl.startsWith('http')) {
+    if (/\/g\/[^/]+\/r\//i.test(recipe.recipeUrl)) {
+      return recipe.recipeUrl;
+    }
+  }
+
+  // 2. If household is explicitly set on frontend, build using it
+  if (publicBase && identifier && mealieHousehold.value) {
     return buildMealieRecipeUrl(publicBase, mealieHousehold.value, identifier);
   }
+
+  // 3. Fall back to backend recipeUrl
   if (recipe.recipeUrl && typeof recipe.recipeUrl === 'string' && recipe.recipeUrl.startsWith('http')) {
     return recipe.recipeUrl;
+  }
+
+  // 4. Fall back to building from public base
+  if (publicBase && identifier) {
+    return buildMealieRecipeUrl(publicBase, mealieHousehold.value, identifier);
   }
   return publicBase;
 }
