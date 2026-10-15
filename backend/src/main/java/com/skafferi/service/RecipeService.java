@@ -416,14 +416,18 @@ public class RecipeService {
                             }
                         }
                         if (!ings.isEmpty()) {
-                            recipeMapByName.put(key, Map.of(
-                                    "id", m.getId() != null ? m.getId() : UUID.randomUUID().toString(),
-                                    "name", m.getRecipeName(),
-                                    "description", "Recipe from Mealie",
-                                    "source", "Mealie Recipe Action",
-                                    "slug", m.getRecipeId() != null ? m.getRecipeId() : m.getRecipeName(),
-                                    "ingredients", ings
-                            ));
+                            Map<String, Object> localRecipe = new HashMap<>();
+                            localRecipe.put("id", m.getId() != null ? m.getId() : UUID.randomUUID().toString());
+                            localRecipe.put("name", m.getRecipeName());
+                            localRecipe.put("description", "Recipe from Mealie");
+                            localRecipe.put("source", "Mealie Recipe Action");
+                            String slug = m.getRecipeId() != null ? m.getRecipeId() : m.getRecipeName();
+                            localRecipe.put("slug", slug);
+                            localRecipe.put("ingredients", ings);
+                            if (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank()) {
+                                localRecipe.put("recipeUrl", settings.mealieBaseUrl().replaceAll("/+$", "") + "/recipes/" + slug);
+                            }
+                            recipeMapByName.put(key, localRecipe);
                         }
                     }
                 }
@@ -472,6 +476,8 @@ public class RecipeService {
                 String name = r.hasNonNull("name") ? r.get("name").asText() : "Untitled Recipe";
                 String desc = r.hasNonNull("description") ? r.get("description").asText() : "";
                 String slug = r.hasNonNull("slug") ? r.get("slug").asText() : id;
+                String prepTime = null;
+                String cookTime = null;
 
                 // Check if summary already contains ingredients (if Mealie ever populates them)
                 List<String> ings = extractIngredientsFromRecipeNode(r);
@@ -500,19 +506,41 @@ public class RecipeService {
                         if (detailRoot.hasNonNull("description")) {
                             desc = detailRoot.get("description").asText();
                         }
+                        if (detailRoot.hasNonNull("prepTime")) {
+                            prepTime = detailRoot.get("prepTime").asText();
+                        } else if (detailRoot.hasNonNull("prep_time")) {
+                            prepTime = detailRoot.get("prep_time").asText();
+                        }
+                        if (detailRoot.hasNonNull("performTime")) {
+                            cookTime = detailRoot.get("performTime").asText();
+                        } else if (detailRoot.hasNonNull("cookTime")) {
+                            cookTime = detailRoot.get("cookTime").asText();
+                        } else if (detailRoot.hasNonNull("perform_time")) {
+                            cookTime = detailRoot.get("perform_time").asText();
+                        } else if (detailRoot.hasNonNull("cook_time")) {
+                            cookTime = detailRoot.get("cook_time").asText();
+                        }
                     } catch (Exception e) {
                         log.warn("Could not fetch recipe details for slug '{}' from Mealie: {}", slug, e.getMessage());
                     }
                 }
 
-                Map<String, Object> recipeMap = Map.of(
-                        "id", id,
-                        "name", name,
-                        "description", desc,
-                        "source", "Mealie",
-                        "slug", slug,
-                        "ingredients", ings
-                );
+                Map<String, Object> recipeMap = new HashMap<>();
+                recipeMap.put("id", id);
+                recipeMap.put("name", name);
+                recipeMap.put("description", desc);
+                recipeMap.put("source", "Mealie");
+                recipeMap.put("slug", slug);
+                recipeMap.put("ingredients", ings);
+                if (url != null && !url.isBlank()) {
+                    recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
+                }
+                if (prepTime != null && !prepTime.isBlank()) {
+                    recipeMap.put("prepTime", prepTime);
+                }
+                if (cookTime != null && !cookTime.isBlank()) {
+                    recipeMap.put("cookTime", cookTime);
+                }
 
                 if (!ings.isEmpty()) {
                     recipeCache.put(slug, new CachedMealieRecipe(now, recipeMap));

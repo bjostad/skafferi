@@ -15,6 +15,14 @@
 
       <div class="flex items-center gap-2">
         <button 
+          @click="toggleSampleMode" 
+          class="px-3.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          :class="isSampleMode ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'">
+          <Sparkles class="w-3.5 h-3.5 text-amber-400" />
+          <span>{{ isSampleMode ? 'Hide Samples' : 'Show Samples' }}</span>
+        </button>
+
+        <button 
           @click="refreshCurrentTab" 
           :disabled="isLoading"
           class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors">
@@ -110,102 +118,158 @@
     <!-- ========================================================================= -->
     <div v-if="activeTab === 'matches'" class="space-y-4">
       
+      <!-- Sample Preview Banner -->
+      <div 
+        v-if="isSampleMode" 
+        class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-brand-500/10 to-slate-900 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs shadow-sm">
+        <div class="flex items-center gap-2.5 text-emerald-300">
+          <Sparkles class="w-4 h-4 text-amber-400 shrink-0" />
+          <span><strong>Sample Preview Mode:</strong> Showing recommended recipe cards with progressive green headers (35% to 100%), &ldquo;Uses Expiring Food&rdquo; badge, and centered Mealie action buttons.</span>
+        </div>
+        <button @click="toggleSampleMode" class="text-xs text-slate-400 hover:text-white underline shrink-0">
+          Exit Preview
+        </button>
+      </div>
+
       <div v-if="recipes.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div 
           v-for="recipe in recipes" 
           :key="recipe.id"
-          class="bg-slate-900/90 border rounded-3xl p-5 shadow-lg flex flex-col justify-between transition-all"
+          class="bg-slate-900/90 border rounded-3xl overflow-hidden shadow-lg flex flex-col justify-between transition-all hover:border-slate-700"
           :class="recipe.savesExpiringFood ? 'border-amber-500/40 bg-gradient-to-br from-amber-950/10 to-slate-900/90' : 'border-slate-800'">
           
-          <div class="space-y-3">
+          <!-- Card Header Section (Title, Match %, dynamic green gradient) -->
+          <div 
+            class="p-4 sm:p-5 transition-colors"
+            :style="getHeaderStyle(recipe.matchPercentage)">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1 min-w-0">
+                <h3 class="font-bold text-lg text-white leading-snug break-words">{{ recipe.name }}</h3>
+                <div v-if="recipe.prepTime || recipe.cookTime" class="flex items-center gap-2 text-xs text-slate-300/80">
+                  <span v-if="recipe.prepTime">Prep: {{ formatDuration(recipe.prepTime) }}</span>
+                  <span v-if="recipe.cookTime">&bull; Cook: {{ formatDuration(recipe.cookTime) }}</span>
+                </div>
+              </div>
+
+              <div class="flex flex-col items-end gap-1.5 shrink-0">
+                <!-- Match % Badge -->
+                <div 
+                  class="flex items-center gap-1.5 px-3 py-1 rounded-full font-mono font-bold text-xs shadow-sm backdrop-blur-sm"
+                  :class="getMatchBadgeClass(recipe.matchPercentage)">
+                  <CheckCircle2 v-if="recipe.matchPercentage === 100" class="w-3.5 h-3.5 text-emerald-300" />
+                  <span>{{ recipe.matchPercentage }}% Match</span>
+                </div>
+
+                <!-- Uses Expiring Food Badge -->
+                <span 
+                  v-if="recipe.savesExpiringFood" 
+                  class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shrink-0">
+                  <Sparkles class="w-3 h-3 text-amber-400" />
+                  <span>Uses Expiring Food</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Content Body -->
+          <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
             
-            <!-- Badges Header -->
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <span 
-                class="text-xs font-bold px-2.5 py-0.5 rounded-full font-mono flex items-center gap-1.5"
-                :class="recipe.matchPercentage >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-800 text-slate-300 border border-slate-700'">
-                <CheckCircle2 v-if="recipe.matchPercentage === 100" class="w-3.5 h-3.5 text-emerald-400" />
-                <span>{{ recipe.matchPercentage }}% Pantry Match</span>
-              </span>
+            <div class="space-y-3">
+              <!-- Description -->
+              <p v-if="recipe.description" class="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                {{ recipe.description }}
+              </p>
 
-              <span 
-                v-if="recipe.savesExpiringFood" 
-                class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                <Sparkles class="w-3.5 h-3.5" />
-                <span>Rescues Expiring Food</span>
-              </span>
-            </div>
+              <!-- Matched Ingredients Chips -->
+              <div>
+                <label class="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                  In-Stock Ingredients ({{ recipe.matchedIngredients?.length || 0 }}):
+                </label>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="(ing, idx) in recipe.matchedIngredients" 
+                    :key="idx"
+                    class="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-medium">
+                    ✓ {{ ing }}
+                  </span>
+                  <span v-if="!recipe.matchedIngredients || recipe.matchedIngredients.length === 0" class="text-xs text-slate-500 italic">
+                    None currently in pantry
+                  </span>
+                </div>
+              </div>
 
-            <!-- Title & Description -->
-            <div>
-              <h3 class="font-bold text-lg text-white">{{ recipe.name }}</h3>
-              <p class="text-xs text-slate-400 mt-1 line-clamp-2">{{ recipe.description }}</p>
-            </div>
-
-            <!-- Quick Meta -->
-            <div class="flex items-center gap-3 text-xs text-slate-400 pt-1">
-              <span v-if="recipe.prepTime">Prep: {{ recipe.prepTime }}</span>
-              <span v-if="recipe.cookTime">&bull; Cook: {{ recipe.cookTime }}</span>
-            </div>
-
-            <!-- Matched Ingredients Chips -->
-            <div>
-              <label class="text-[11px] font-semibold text-slate-400 block mb-1.5">In-Stock Ingredients:</label>
-              <div class="flex flex-wrap gap-1.5">
-                <span 
-                  v-for="(ing, idx) in recipe.matchedIngredients" 
-                  :key="idx"
-                  class="text-[11px] px-2 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-medium">
-                  ✓ {{ ing }}
-                </span>
-                <span v-if="recipe.matchedIngredients.length === 0" class="text-xs text-slate-500">
-                  None currently in pantry
-                </span>
+              <!-- Missing Ingredients Chips -->
+              <div v-if="recipe.missingIngredients && recipe.missingIngredients.length > 0">
+                <label class="text-[11px] font-semibold text-slate-400 block mb-1.5">
+                  Missing Ingredients ({{ recipe.missingIngredients.length }}):
+                </label>
+                <div class="flex flex-wrap gap-1.5">
+                  <span 
+                    v-for="(ing, idx) in recipe.missingIngredients" 
+                    :key="idx"
+                    class="text-[11px] px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700 font-medium">
+                    + {{ ing }}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <!-- Missing Ingredients Chips -->
-            <div v-if="recipe.missingIngredients && recipe.missingIngredients.length > 0">
-              <label class="text-[11px] font-semibold text-slate-400 block mb-1.5">Missing Ingredients:</label>
-              <div class="flex flex-wrap gap-1.5">
-                <span 
-                  v-for="(ing, idx) in recipe.missingIngredients" 
-                  :key="idx"
-                  class="text-[11px] px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700 font-medium">
-                  + {{ ing }}
+            <!-- Card Bottom Section: Prominent Centered Match / Link Button & Actions -->
+            <div class="pt-4 border-t border-slate-800/80 flex flex-col items-center gap-3">
+              <!-- Prominent Match Button in Middle Bottom -->
+              <a 
+                v-if="getMealieRecipeUrl(recipe)"
+                :href="getMealieRecipeUrl(recipe)" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md shadow-emerald-950/40 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-center">
+                <UtensilsCrossed class="w-4 h-4" />
+                <span>View Recipe in Mealie</span>
+                <ExternalLink class="w-3.5 h-3.5 opacity-80" />
+              </a>
+              <div 
+                v-else
+                class="text-[11px] text-slate-500 italic text-center">
+                Configure Mealie URL in Settings to open recipe directly
+              </div>
+
+              <!-- Secondary Row -->
+              <div class="w-full flex items-center justify-between text-xs pt-1">
+                <span class="text-[11px] text-slate-500 font-medium">Source: {{ recipe.source || 'Mealie' }}</span>
+
+                <button 
+                  v-if="recipe.missingIngredients && recipe.missingIngredients.length > 0"
+                  type="button" 
+                  @click="addMissingToShopping(recipe.missingIngredients)"
+                  class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-brand-300 hover:text-brand-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                  <ShoppingCart class="w-3.5 h-3.5" />
+                  <span>Add {{ recipe.missingIngredients.length }} Missing to List</span>
+                </button>
+                <span v-else class="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 class="w-4 h-4" />
+                  <span>All in stock!</span>
                 </span>
               </div>
             </div>
 
           </div>
-
-          <!-- Card Actions -->
-          <div class="flex items-center justify-between pt-4 mt-4 border-t border-slate-800">
-            <span class="text-[11px] text-slate-500 font-medium">Source: {{ recipe.source || 'Pantry Chef' }}</span>
-
-            <button 
-              v-if="recipe.missingIngredients && recipe.missingIngredients.length > 0"
-              type="button" 
-              @click="addMissingToShopping(recipe.missingIngredients)"
-              class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-brand-300 hover:text-brand-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors">
-              <ShoppingCart class="w-3.5 h-3.5" />
-              <span>Add {{ recipe.missingIngredients.length }} Missing to List</span>
-            </button>
-            <span v-else class="text-xs font-bold text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 class="w-4 h-4" />
-              <span>All in stock!</span>
-            </span>
-          </div>
-
         </div>
       </div>
 
-      <div v-else class="text-center py-12 bg-slate-900/60 rounded-3xl border border-slate-800 p-8">
-        <UtensilsCrossed class="w-12 h-12 text-slate-600 mx-auto mb-3" />
+      <div v-else class="text-center py-12 bg-slate-900/60 rounded-3xl border border-slate-800 p-8 space-y-3">
+        <UtensilsCrossed class="w-12 h-12 text-slate-600 mx-auto mb-2" />
         <h4 class="text-base font-bold text-white">No Recipe Matches Found</h4>
-        <p class="text-xs text-slate-400 max-w-md mx-auto mt-1">
+        <p class="text-xs text-slate-400 max-w-md mx-auto">
           Stock additional pantry ingredients or configure your Mealie integration in Settings to sync your personal recipe book!
         </p>
+        <div class="pt-2">
+          <button 
+            @click="toggleSampleMode" 
+            class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 border border-brand-500/40 text-xs font-bold transition-all">
+            <Sparkles class="w-4 h-4 text-amber-400" />
+            <span>Load Recommended Recipe Samples</span>
+          </button>
+        </div>
       </div>
 
     </div>
@@ -476,7 +540,7 @@
 import { ref, onMounted } from 'vue';
 import { 
   ChefHat, UtensilsCrossed, Sparkles, Check, CheckCircle2, ShoppingCart, RefreshCw,
-  Clock, ArrowRight, X, Settings 
+  Clock, ArrowRight, X, Settings, ExternalLink
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
@@ -488,8 +552,69 @@ const isLoading = ref(false);
 const isGenerating = ref(false);
 const isReconciling = ref(false);
 
+const mealieBaseUrl = ref('');
 const hasMealieConfigured = ref(false);
 const hasLlmConfigured = ref(false);
+const isSampleMode = ref(false);
+
+const SAMPLE_RECIPES = [
+  {
+    id: 'sample-tuscan-chicken',
+    name: 'Creamy Tuscan Garlic Chicken',
+    slug: 'creamy-tuscan-garlic-chicken',
+    description: 'Tender chicken cutlets simmered in a luscious garlic, sun-dried tomato, and spinach cream sauce.',
+    prepTime: 'PT15M',
+    cookTime: 'PT20M',
+    matchPercentage: 100,
+    savesExpiringFood: true,
+    matchedIngredients: ['Chicken Breast', 'Heavy Cream', 'Baby Spinach', 'Garlic', 'Parmesan Cheese'],
+    missingIngredients: [],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/creamy-tuscan-garlic-chicken'
+  },
+  {
+    id: 'sample-pesto-pasta',
+    name: 'Fresh Garden Basil Pesto Penne',
+    slug: 'fresh-garden-basil-pesto-penne',
+    description: 'Al dente penne tossed with freshly crushed sweet basil, extra virgin olive oil, and aged parmesan.',
+    prepTime: 'PT10M',
+    cookTime: 'PT15M',
+    matchPercentage: 80,
+    savesExpiringFood: true,
+    matchedIngredients: ['Penne Pasta', 'Fresh Basil', 'Garlic Cloves', 'Extra Virgin Olive Oil'],
+    missingIngredients: ['Pine Nuts'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/fresh-garden-basil-pesto-penne'
+  },
+  {
+    id: 'sample-beef-tacos',
+    name: 'Classic Skillet Beef Tacos',
+    slug: 'classic-skillet-beef-tacos',
+    description: 'Crispy warm taco shells filled with seasoned ground beef, melted sharp cheddar, and fresh pico de gallo.',
+    prepTime: 'PT10M',
+    cookTime: 'PT20M',
+    matchPercentage: 60,
+    savesExpiringFood: false,
+    matchedIngredients: ['Ground Beef', 'Sharp Cheddar', 'Canned Black Beans'],
+    missingIngredients: ['Taco Shells', 'Sour Cream'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/classic-skillet-beef-tacos'
+  },
+  {
+    id: 'sample-minestrone',
+    name: 'Rustic Tuscan Vegetable Minestrone',
+    slug: 'rustic-tuscan-vegetable-minestrone',
+    description: 'Wholesome simmered soup packed with hearty root vegetables, cannellini beans, and Italian herbs.',
+    prepTime: 'PT20M',
+    cookTime: 'PT40M',
+    matchPercentage: 35,
+    savesExpiringFood: false,
+    matchedIngredients: ['Carrots', 'Diced Tomatoes'],
+    missingIngredients: ['Cannellini Beans', 'Celery', 'Zucchini', 'Vegetable Broth'],
+    source: 'Mealie',
+    recipeUrl: 'http://localhost:9000/recipes/rustic-tuscan-vegetable-minestrone'
+  }
+];
 
 const recipes = ref([]);
 const pendingMeals = ref([]);
@@ -500,16 +625,15 @@ async function loadSettings() {
   try {
     const res = await api.getSettings();
     const data = res.data || {};
+    mealieBaseUrl.value = data.mealieBaseUrl || '';
     hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
     hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
 
-    // Choose default active tab based on what's configured
+    // Choose default active tab based on what's configured or if sample recipes exist
     if (pendingMeals.value.length > 0) {
       activeTab.value = 'pending';
-    } else if (hasMealieConfigured.value) {
+    } else {
       activeTab.value = 'matches';
-    } else if (hasLlmConfigured.value) {
-      activeTab.value = 'generator';
     }
   } catch (err) {
     console.error('Failed to load settings in RecipesView:', err);
@@ -520,11 +644,31 @@ async function loadRecipes(force = false) {
   isLoading.value = true;
   try {
     const res = await api.getRecipeMatches(force ? { refresh: true } : {});
-    recipes.value = res.data || [];
+    const data = res.data || [];
+    if (data.length > 0) {
+      recipes.value = data;
+      isSampleMode.value = false;
+    } else {
+      // Backend returned 0 matches; display sample preview recipes
+      recipes.value = SAMPLE_RECIPES;
+      isSampleMode.value = true;
+    }
   } catch (err) {
-    showToast('Failed to load matching recipes: ' + err.message, 'error');
+    console.warn('Recipe matches returned error, falling back to samples:', err);
+    recipes.value = SAMPLE_RECIPES;
+    isSampleMode.value = true;
   } finally {
     isLoading.value = false;
+  }
+}
+
+function toggleSampleMode() {
+  if (isSampleMode.value) {
+    isSampleMode.value = false;
+    recipes.value = [];
+  } else {
+    isSampleMode.value = true;
+    recipes.value = SAMPLE_RECIPES;
   }
 }
 
@@ -690,6 +834,60 @@ async function addMissingToShopping(items) {
   } catch (err) {
     showToast('Failed to add missing ingredients: ' + err.message, 'error');
   }
+}
+
+function getMealieRecipeUrl(recipe) {
+  if (!recipe) return '';
+  if (recipe.recipeUrl && typeof recipe.recipeUrl === 'string' && recipe.recipeUrl.startsWith('http')) {
+    return recipe.recipeUrl;
+  }
+  const base = mealieBaseUrl.value ? mealieBaseUrl.value.replace(/\/+$/, '') : '';
+  if (!base) return '';
+  const identifier = recipe.slug || recipe.id;
+  if (!identifier) return base;
+  return `${base}/recipes/${identifier}`;
+}
+
+function getHeaderStyle(matchPercentage = 0) {
+  const pct = Math.max(0, Math.min(100, Number(matchPercentage) || 0));
+  const factor = pct / 100;
+  
+  // Interpolate emerald tint:
+  // At 0%: subtle slate overlay (alpha ~0.04)
+  // At 100%: rich, glowing emerald green (alpha ~0.42)
+  const startAlpha = (0.04 + factor * 0.38).toFixed(3);
+  const endAlpha = (0.02 + factor * 0.26).toFixed(3);
+  const borderAlpha = (0.12 + factor * 0.48).toFixed(3);
+
+  return {
+    background: `linear-gradient(135deg, rgba(16, 185, 129, ${startAlpha}) 0%, rgba(5, 150, 105, ${endAlpha}) 100%)`,
+    borderBottom: `1px solid rgba(16, 185, 129, ${borderAlpha})`
+  };
+}
+
+function getMatchBadgeClass(matchPercentage = 0) {
+  const pct = Number(matchPercentage) || 0;
+  if (pct >= 90) {
+    return 'bg-emerald-500/35 text-emerald-100 border border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]';
+  } else if (pct >= 70) {
+    return 'bg-emerald-500/25 text-emerald-200 border border-emerald-500/50';
+  } else if (pct >= 40) {
+    return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/35';
+  } else {
+    return 'bg-slate-800/80 text-slate-300 border border-slate-700/80';
+  }
+}
+
+function formatDuration(val) {
+  if (!val) return '';
+  if (typeof val !== 'string') return String(val);
+  const match = val.match(/PT(?:(\d+)H)?(?:(\d+)M)?/i);
+  if (match) {
+    const hours = match[1] ? `${match[1]} hr` : '';
+    const mins = match[2] ? `${match[2]} min` : '';
+    return [hours, mins].filter(Boolean).join(' ') || val;
+  }
+  return val;
 }
 
 onMounted(async () => {
