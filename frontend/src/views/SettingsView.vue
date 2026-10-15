@@ -936,22 +936,35 @@
             <p class="text-[11px] text-slate-400">Configure these credentials if you also want {{ currentAppName }} to browse and suggest recipes based on your current pantry inventory.</p>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="text-xs font-semibold text-slate-300 block mb-1">Mealie Base URL (Optional)</label>
-              <input 
-                v-model="settings.mealieBaseUrl" 
-                placeholder="http://192.168.1.50:9000" 
-                class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="text-xs font-semibold text-slate-300 block mb-1">Mealie API Base URL</label>
+                <input 
+                  v-model="settings.mealieBaseUrl" 
+                  placeholder="http://mealie:9000" 
+                  class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+                <p class="text-[10px] text-slate-500 mt-1">Internal Docker/LAN URL used by Skafferi server to sync recipes.</p>
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold text-slate-300 block mb-1">Mealie API Token</label>
+                <input 
+                  v-model="settings.mealieApiToken" 
+                  type="password" 
+                  placeholder="Bearer Token..." 
+                  class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+                <p class="text-[10px] text-slate-500 mt-1">Long-lived API token from Mealie User Profile &gt; API Tokens.</p>
+              </div>
             </div>
 
             <div>
-              <label class="text-xs font-semibold text-slate-300 block mb-1">Mealie API Token (Optional)</label>
+              <label class="text-xs font-semibold text-slate-300 block mb-1">Mealie Frontend URL (Optional)</label>
               <input 
-                v-model="settings.mealieApiToken" 
-                type="password" 
-                placeholder="Bearer Token..." 
+                v-model="settings.mealieFrontendUrl" 
+                placeholder="https://mealie.ballardplex.com" 
                 class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500" />
+              <p class="text-[10px] text-slate-500 mt-1">Public browser URL used when clicking links to view recipes in Mealie (defaults to API Base URL if left blank).</p>
             </div>
           </div>
 
@@ -1684,6 +1697,7 @@ const settings = reactive({
   expirationReminderDays: 3,
   expirationReminderEnabled: true,
   mealieBaseUrl: '',
+  mealieFrontendUrl: '',
   mealieApiToken: '',
   mealieAutoDeduct: false,
   krogerClientId: '',

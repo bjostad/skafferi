@@ -118,6 +118,19 @@ public class RecipeService {
             return Collections.emptyList();
         }
 
+        SettingsDto settings = null;
+        String publicBaseUrl = null;
+        try {
+            settings = settingsService.getRawSettings();
+            if (settings != null) {
+                publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
+                        ? settings.mealieFrontendUrl().trim().replaceAll("/+$", "")
+                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim().replaceAll("/+$", "") : null);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
         List<Map<String, Object>> matchedRecipes = new ArrayList<>();
 
         for (Map<String, Object> r : allRecipes) {
@@ -154,6 +167,12 @@ public class RecipeService {
             int matchPercent = (int) Math.round(((double) matched.size() / (double) ingredients.size()) * 100);
 
             Map<String, Object> result = new HashMap<>(r);
+            if (publicBaseUrl != null) {
+                String slug = (String) r.get("slug");
+                if (slug != null && !slug.isBlank()) {
+                    result.put("recipeUrl", publicBaseUrl + "/recipes/" + slug);
+                }
+            }
             result.put("matchPercentage", matchPercent);
             result.put("matchedIngredients", matched);
             result.put("missingIngredients", missing);
@@ -483,8 +502,11 @@ public class RecipeService {
                             String slug = m.getRecipeId() != null ? m.getRecipeId() : m.getRecipeName();
                             localRecipe.put("slug", slug);
                             localRecipe.put("ingredients", ings);
-                            if (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank()) {
-                                localRecipe.put("recipeUrl", settings.mealieBaseUrl().replaceAll("/+$", "") + "/recipes/" + slug);
+                            String publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
+                                    ? settings.mealieFrontendUrl().trim()
+                                    : settings.mealieBaseUrl();
+                            if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+                                localRecipe.put("recipeUrl", publicBaseUrl.replaceAll("/+$", "") + "/recipes/" + slug);
                             }
                             recipeMapByName.put(key, localRecipe);
                         }
@@ -501,6 +523,9 @@ public class RecipeService {
     private List<Map<String, Object>> fetchRecipesFromMealieApi(SettingsDto settings, boolean forceRefresh) {
         String url = settings.mealieBaseUrl();
         String token = settings.mealieApiToken();
+        String publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
+                ? settings.mealieFrontendUrl().trim()
+                : url;
 
         if (url == null || url.isBlank() || token == null || token.isBlank()) {
             return Collections.emptyList();
@@ -606,7 +631,7 @@ public class RecipeService {
                 // Check if summary node itself contains ingredients
                 List<String> summaryIngs = extractIngredientsFromRecipeNode(summary);
                 if (!summaryIngs.isEmpty()) {
-                    Map<String, Object> rMap = buildRecipeMapFromNode(summary, summaryIngs, url);
+                    Map<String, Object> rMap = buildRecipeMapFromNode(summary, summaryIngs, publicBaseUrl);
                     recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, rMap));
                     persistToDb(rMap, dateUpdated);
                     readyRecipes.add(rMap);
@@ -650,7 +675,7 @@ public class RecipeService {
                         rateLimiter.acquire();
                         try {
                             String dateUpdated = extractDateUpdated(summary);
-                            Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated);
+                            Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl);
                             if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
                                 String slug = (String) detail.get("slug");
                                 recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, detail));
@@ -705,7 +730,7 @@ public class RecipeService {
                                 break;
                             }
                             try {
-                                Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated);
+                                Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated, publicBaseUrl);
                                 if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
                                     recipeCache.put(slug, new CachedMealieRecipe(System.currentTimeMillis(), dateUpdated, detail));
                                     persistToDb(detail, dateUpdated);
@@ -782,7 +807,7 @@ public class RecipeService {
         return null;
     }
 
-    private Map<String, Object> fetchRecipeDetailWithRetry(String url, String token, JsonNode summary, String dateUpdated) {
+    private Map<String, Object> fetchRecipeDetailWithRetry(String url, String token, JsonNode summary, String dateUpdated, String publicBaseUrl) {
         String id = summary.hasNonNull("id") ? summary.get("id").asText() : UUID.randomUUID().toString();
         String name = summary.hasNonNull("name") ? summary.get("name").asText() : "Untitled Recipe";
         String desc = summary.hasNonNull("description") ? summary.get("description").asText() : "";
@@ -858,8 +883,9 @@ public class RecipeService {
         recipeMap.put("source", "Mealie");
         recipeMap.put("slug", slug);
         recipeMap.put("ingredients", ings);
-        if (url != null && !url.isBlank()) {
-            recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
+        String linkUrl = (publicBaseUrl != null && !publicBaseUrl.isBlank()) ? publicBaseUrl : url;
+        if (linkUrl != null && !linkUrl.isBlank()) {
+            recipeMap.put("recipeUrl", linkUrl.replaceAll("/+$", "") + "/recipes/" + slug);
         }
         if (prepTime != null && !prepTime.isBlank()) {
             recipeMap.put("prepTime", prepTime);
@@ -906,7 +932,22 @@ public class RecipeService {
         map.put("description", cr.getDescription() != null ? cr.getDescription() : "");
         map.put("source", cr.getSource() != null ? cr.getSource() : "Mealie");
         map.put("slug", cr.getSlug());
-        map.put("recipeUrl", cr.getRecipeUrl());
+        
+        String recipeUrl = cr.getRecipeUrl();
+        try {
+            SettingsDto settings = settingsService.getRawSettings();
+            if (settings != null) {
+                String publicBaseUrl = (settings.mealieFrontendUrl() != null && !settings.mealieFrontendUrl().isBlank())
+                        ? settings.mealieFrontendUrl().trim().replaceAll("/+$", "")
+                        : (settings.mealieBaseUrl() != null && !settings.mealieBaseUrl().isBlank() ? settings.mealieBaseUrl().trim().replaceAll("/+$", "") : null);
+                if (publicBaseUrl != null && cr.getSlug() != null && !cr.getSlug().isBlank()) {
+                    recipeUrl = publicBaseUrl + "/recipes/" + cr.getSlug();
+                }
+            }
+        } catch (Exception e) {
+            // Ignore if settings service is unavailable
+        }
+        map.put("recipeUrl", recipeUrl);
         if (cr.getPrepTime() != null) map.put("prepTime", cr.getPrepTime());
         if (cr.getCookTime() != null) map.put("cookTime", cr.getCookTime());
 

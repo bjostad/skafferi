@@ -124,21 +124,21 @@
         class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-brand-500/10 to-slate-900 border border-emerald-500/30 flex items-center justify-between gap-3 text-xs shadow-sm">
         <div class="flex items-center gap-2.5 text-emerald-300">
           <Sparkles class="w-4 h-4 text-amber-400 shrink-0" />
-          <span><strong>Sample Preview Mode:</strong> Showing recommended recipe cards with progressive green headers (20% to 100%), &ldquo;Uses Expiring Food&rdquo; badges, and 15-item pagination.</span>
+          <span><strong>Sample Preview Mode:</strong> Showing recommended recipe cards with progressive green headers (20% to 100%), &ldquo;Uses Expiring Food&rdquo; badges, and 10-item pagination.</span>
         </div>
         <button @click="toggleSampleMode" class="text-xs text-slate-400 hover:text-white underline shrink-0">
           Exit Preview
         </button>
       </div>
 
-      <!-- Top Pagination Info & Quick Nav (visible when over 15 recipes) -->
+      <!-- Top Pagination Info & Quick Nav (visible when over 10 recipes) -->
       <div 
-        v-if="recipes.length > 15" 
+        v-if="recipes.length > pageSize" 
         class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 shadow-sm text-xs">
         <div class="flex items-center gap-2 text-slate-300">
           <UtensilsCrossed class="w-4 h-4 text-emerald-400 shrink-0" />
           <span>
-            Showing <strong class="text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</strong> of <strong class="text-white">{{ recipes.length }}</strong> matched recipes (15 per page)
+            Showing <strong class="text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</strong> of <strong class="text-white">{{ recipes.length }}</strong> matched recipes ({{ pageSize }} per page)
           </span>
         </div>
 
@@ -290,12 +290,12 @@
         </div>
       </div>
 
-      <!-- Bottom Pagination Bar (when over 15 recipes) -->
+      <!-- Bottom Pagination Bar (when over pageSize recipes) -->
       <div 
-        v-if="recipes.length > 15" 
+        v-if="recipes.length > pageSize" 
         class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800">
         <p class="text-xs text-slate-400">
-          Showing <span class="font-bold text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</span> of <span class="font-bold text-white">{{ recipes.length }}</span> matches (15 per page)
+          Showing <span class="font-bold text-white">{{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, recipes.length) }}</span> of <span class="font-bold text-white">{{ recipes.length }}</span> matches ({{ pageSize }} per page)
         </p>
 
         <div class="flex items-center gap-1.5 flex-wrap justify-center">
@@ -629,13 +629,14 @@ const isGenerating = ref(false);
 const isReconciling = ref(false);
 
 const mealieBaseUrl = ref('');
+const mealieFrontendUrl = ref('');
 const hasMealieConfigured = ref(false);
 const hasLlmConfigured = ref(false);
 const isSampleMode = ref(false);
 
 const recipeGridRef = ref(null);
 const currentPage = ref(1);
-const pageSize = 15;
+const pageSize = 10;
 
 const SAMPLE_RECIPES = [
   {
@@ -963,6 +964,7 @@ async function loadSettings() {
     const res = await api.getSettings();
     const data = res.data || {};
     mealieBaseUrl.value = data.mealieBaseUrl || '';
+    mealieFrontendUrl.value = data.mealieFrontendUrl || '';
     hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
     hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
 
@@ -1177,14 +1179,15 @@ async function addMissingToShopping(items) {
 
 function getMealieRecipeUrl(recipe) {
   if (!recipe) return '';
+  const publicBase = (mealieFrontendUrl.value || mealieBaseUrl.value || '').replace(/\/+$/, '');
+  const identifier = recipe.slug || recipe.id;
+  if (publicBase && identifier) {
+    return `${publicBase}/recipes/${identifier}`;
+  }
   if (recipe.recipeUrl && typeof recipe.recipeUrl === 'string' && recipe.recipeUrl.startsWith('http')) {
     return recipe.recipeUrl;
   }
-  const base = mealieBaseUrl.value ? mealieBaseUrl.value.replace(/\/+$/, '') : '';
-  if (!base) return '';
-  const identifier = recipe.slug || recipe.id;
-  if (!identifier) return base;
-  return `${base}/recipes/${identifier}`;
+  return publicBase;
 }
 
 function getHeaderStyle(matchPercentage = 0) {

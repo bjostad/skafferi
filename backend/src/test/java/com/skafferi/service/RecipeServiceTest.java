@@ -149,4 +149,45 @@ class RecipeServiceTest {
         long expiringCount = matches.stream().filter(r -> Boolean.TRUE.equals(r.get("savesExpiringFood"))).count();
         assertEquals(20, expiringCount);
     }
+
+    @Test
+    void testRecipeUrlPrefersMealieFrontendUrlOverBaseUrl() {
+        CachedRecipe cr = new CachedRecipe(
+                "rec-public", "tacos-de-asada", "Carne Asada Tacos", "Authentic tacos",
+                "Mealie", "http://mealie:9000/recipes/tacos-de-asada", "15m", "15m",
+                "2026-10-15T10:00:00Z", "[\"Flank Steak\", \"Tortillas\"]", System.currentTimeMillis()
+        );
+        when(cachedRecipeRepository.findAll()).thenReturn(List.of(cr));
+
+        RecipeService recipeService = new RecipeService(
+                settingsService, inventoryService, bringSyncService, itemRepository, pendingMealRepository, cachedRecipeRepository
+        );
+
+        SettingsDto settingsDto = Mockito.mock(SettingsDto.class);
+        when(settingsDto.mealieBaseUrl()).thenReturn("http://mealie:9000");
+        when(settingsDto.mealieFrontendUrl()).thenReturn("https://mealie.ballardplex.com");
+        when(settingsService.getRawSettings()).thenReturn(settingsDto);
+        when(settingsService.hasMealieConnection()).thenReturn(false);
+
+        PantryItemSummaryDto steak = createMockPantryItem("Flank Steak", 1.0);
+        when(inventoryService.getAllPantrySummaries(null, null, null, null, null, null, "NAME"))
+                .thenReturn(List.of(steak));
+
+        NotificationSummaryDto notifs = new NotificationSummaryDto(
+                0, 0, 0, 0, 0,
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyList()
+        );
+        when(inventoryService.getNotificationSummary()).thenReturn(notifs);
+
+        List<Map<String, Object>> matches = recipeService.getMatchingRecipes(false);
+
+        assertNotNull(matches);
+        assertEquals(1, matches.size());
+        Map<String, Object> match = matches.get(0);
+        // Ensure the public frontend URL is used for recipeUrl instead of the internal docker URL
+        assertEquals("https://mealie.ballardplex.com/recipes/tacos-de-asada", match.get("recipeUrl"));
+    }
 }

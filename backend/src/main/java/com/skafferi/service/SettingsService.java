@@ -35,6 +35,9 @@ public class SettingsService {
     @Value("${skafferi.integrations.mealie.base-url:}")
     private String defaultMealieUrl;
 
+    @Value("${skafferi.integrations.mealie.frontend-url:}")
+    private String defaultMealieFrontendUrl;
+
     @Value("${skafferi.integrations.mealie.api-token:}")
     private String defaultMealieToken;
 
@@ -71,7 +74,7 @@ public class SettingsService {
     @Value("${skafferi.auth.google.client-secret:}")
     private String defaultGoogleClientSecret;
 
-    @Value("${skafferi.version:0.6.6-beta}")
+    @Value("${skafferi.version:0.6.7-beta}")
     private String configuredVersion;
 
     @Value("${skafferi.app-name:Skafferi}")
@@ -142,6 +145,7 @@ public class SettingsService {
                 "",
                 defaultBringAutoSync,
                 defaultMealieUrl,
+                defaultMealieFrontendUrl,
                 defaultMealieToken,
                 defaultMealieAutoDeduct,
                 defaultKrogerClientId,
@@ -191,6 +195,7 @@ public class SettingsService {
                 raw.bringListUuid(),
                 raw.bringAutoSync(),
                 raw.mealieBaseUrl(),
+                raw.mealieFrontendUrl() != null ? raw.mealieFrontendUrl() : "",
                 raw.mealieApiToken() != null && !raw.mealieApiToken().isBlank() ? "********" : "",
                 raw.mealieAutoDeduct() != null ? raw.mealieAutoDeduct() : false,
                 raw.krogerClientId(),
@@ -261,7 +266,8 @@ public class SettingsService {
                 bringPass,
                 dto.bringListUuid(),
                 dto.bringAutoSync(),
-                dto.mealieBaseUrl(),
+                dto.mealieBaseUrl() != null ? dto.mealieBaseUrl().trim() : "",
+                dto.mealieFrontendUrl() != null ? dto.mealieFrontendUrl().trim() : "",
                 mealieToken,
                 dto.mealieAutoDeduct() != null ? dto.mealieAutoDeduct() : false,
                 dto.krogerClientId(),

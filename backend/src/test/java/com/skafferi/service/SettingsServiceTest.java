@@ -47,6 +47,7 @@ public class SettingsServiceTest {
                 current.bringListUuid(),
                 current.bringAutoSync(),
                 current.mealieBaseUrl(),
+                current.mealieFrontendUrl(),
                 current.mealieApiToken(),
                 current.mealieAutoDeduct(),
                 current.krogerClientId(),
@@ -103,6 +104,7 @@ public class SettingsServiceTest {
                 current.bringListUuid(),
                 current.bringAutoSync(),
                 current.mealieBaseUrl(),
+                current.mealieFrontendUrl(),
                 current.mealieApiToken(),
                 current.mealieAutoDeduct(),
                 current.krogerClientId(),
@@ -141,5 +143,61 @@ public class SettingsServiceTest {
         SettingsDto saved = settingsService.saveSettings(withBlank);
         assertEquals("", saved.appName());
         assertEquals("Skafferi", settingsService.getAppName());
+    }
+
+    @Test
+    void testMealieBaseAndFrontendUrlsSeparation() {
+        SettingsDto current = settingsService.getSettings();
+        SettingsDto updated = new SettingsDto(
+                current.appName(),
+                current.bringEmail(),
+                current.bringPassword(),
+                current.bringListUuid(),
+                current.bringAutoSync(),
+                "http://mealie:9000",
+                "https://mealie.ballardplex.com",
+                "sample-token",
+                current.mealieAutoDeduct(),
+                current.krogerClientId(),
+                current.krogerClientSecret(),
+                current.krogerLocationId(),
+                current.authentikEnabled(),
+                current.authentikIssuerUrl(),
+                current.authentikClientId(),
+                current.authentikClientSecret(),
+                current.googleAuthEnabled(),
+                current.googleClientId(),
+                current.googleClientSecret(),
+                current.freshFoodReminderDays(),
+                current.freshFoodReminderEnabled(),
+                current.expirationReminderDays(),
+                current.expirationReminderEnabled(),
+                current.smtpHost(),
+                current.smtpPort(),
+                current.smtpUsername(),
+                current.smtpPassword(),
+                current.smtpEncryption(),
+                current.smtpFromAddress(),
+                current.smtpRecipients(),
+                current.smtpEnabled(),
+                current.smtpDailyDigestEnabled(),
+                current.smtpWeeklyDigestEnabled(),
+                current.llmApiKey(),
+                current.llmProvider(),
+                current.llmModel(),
+                current.llmBaseUrl(),
+                current.hasLlmApiKey(),
+                current.hasMealieConnection(),
+                current.appVersion()
+        );
+
+        SettingsDto saved = settingsService.saveSettings(updated);
+        assertEquals("http://mealie:9000", saved.mealieBaseUrl());
+        assertEquals("https://mealie.ballardplex.com", saved.mealieFrontendUrl());
+        assertTrue(settingsService.hasMealieConnection());
+
+        SettingsDto reRead = settingsService.getSettings();
+        assertEquals("http://mealie:9000", reRead.mealieBaseUrl());
+        assertEquals("https://mealie.ballardplex.com", reRead.mealieFrontendUrl());
     }
 }
