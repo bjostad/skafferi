@@ -1,12 +1,15 @@
 package com.skafferi.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skafferi.domain.CachedRecipe;
 import com.skafferi.domain.PendingCookedMeal;
 import com.skafferi.domain.PendingMealItem;
 import com.skafferi.dto.NotificationSummaryDto;
 import com.skafferi.dto.PantryItemSummaryDto;
 import com.skafferi.dto.SettingsDto;
+import com.skafferi.repository.CachedRecipeRepository;
 import com.skafferi.repository.ItemRepository;
 import com.skafferi.repository.PendingCookedMealRepository;
 import com.skafferi.util.IngredientMatcher;
@@ -21,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,23 +37,29 @@ public class RecipeService {
     private final BringSyncService bringSyncService;
     private final ItemRepository itemRepository;
     private final PendingCookedMealRepository pendingMealRepository;
+    private final CachedRecipeRepository cachedRecipeRepository;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
     private final Map<String, CachedMealieRecipe> recipeCache = new ConcurrentHashMap<>();
+    private final AtomicBoolean isBackgroundSyncRunning = new AtomicBoolean(false);
+    private volatile long lastMealieScanTime = 0;
+    private static final long SCAN_COOLDOWN_MS = 5 * 60 * 1000L; // 5 minutes between full scans unless forced
 
-    private record CachedMealieRecipe(long timestamp, Map<String, Object> recipeData) {}
+    private record CachedMealieRecipe(long timestamp, String dateUpdated, Map<String, Object> recipeData) {}
 
     public RecipeService(SettingsService settingsService,
                          InventoryService inventoryService,
                          BringSyncService bringSyncService,
                          ItemRepository itemRepository,
-                         @org.springframework.beans.factory.annotation.Autowired(required = false) PendingCookedMealRepository pendingMealRepository) {
+                         @org.springframework.beans.factory.annotation.Autowired(required = false) PendingCookedMealRepository pendingMealRepository,
+                         @org.springframework.beans.factory.annotation.Autowired(required = false) CachedRecipeRepository cachedRecipeRepository) {
         this.settingsService = settingsService;
         this.inventoryService = inventoryService;
         this.bringSyncService = bringSyncService;
         this.itemRepository = itemRepository;
         this.pendingMealRepository = pendingMealRepository;
+        this.cachedRecipeRepository = cachedRecipeRepository;
 
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
@@ -58,6 +68,22 @@ public class RecipeService {
                 .requestFactory(requestFactory)
                 .build();
         this.objectMapper = new ObjectMapper();
+
+        if (this.cachedRecipeRepository != null) {
+            try {
+                List<CachedRecipe> allCached = this.cachedRecipeRepository.findAll();
+                long now = System.currentTimeMillis();
+                for (CachedRecipe cr : allCached) {
+                    Map<String, Object> rMap = toRecipeMap(cr);
+                    if (rMap != null && rMap.get("ingredients") != null && !((List<?>) rMap.get("ingredients")).isEmpty()) {
+                        this.recipeCache.put(cr.getSlug(), new CachedMealieRecipe(cr.getLastSyncedAt() > 0 ? cr.getLastSyncedAt() : now, cr.getDateUpdated(), rMap));
+                    }
+                }
+                log.info("Initialized in-memory recipe cache with {} recipes from SQLite database", recipeCache.size());
+            } catch (Exception e) {
+                log.warn("Could not pre-load cached recipes from SQLite: {}", e.getMessage());
+            }
+        }
     }
 
     public List<Map<String, Object>> getMatchingRecipes() {
@@ -66,7 +92,7 @@ public class RecipeService {
 
     public List<Map<String, Object>> getMatchingRecipes(boolean forceRefresh) {
         if (forceRefresh) {
-            recipeCache.clear();
+            lastMealieScanTime = 0;
         }
 
         SettingsDto rawSettings = settingsService.getRawSettings();
@@ -87,7 +113,7 @@ public class RecipeService {
         notifs.expiredItems().forEach(i -> expiringNames.add(i.name()));
         notifs.freshCheckItems().forEach(i -> expiringNames.add(i.name()));
 
-        List<Map<String, Object>> allRecipes = fetchRecipes(rawSettings);
+        List<Map<String, Object>> allRecipes = fetchRecipes(rawSettings, forceRefresh);
         if (allRecipes.isEmpty()) {
             return Collections.emptyList();
         }
@@ -148,6 +174,22 @@ public class RecipeService {
             int bMatch = (int) b.get("matchPercentage");
             return Integer.compare(bMatch, aMatch);
         });
+
+        // Scalability protection for large catalogs (e.g. 15 to 15,000 recipes):
+        // Return all recipes that save expiring food, plus top matches capped at 100 total
+        // to avoid overwhelming browser memory and DOM rendering.
+        int maxResults = 100;
+        if (matchedRecipes.size() > maxResults) {
+            List<Map<String, Object>> capped = new ArrayList<>();
+            for (Map<String, Object> r : matchedRecipes) {
+                if (Boolean.TRUE.equals(r.get("savesExpiringFood"))) {
+                    capped.add(r);
+                } else if (capped.size() < maxResults) {
+                    capped.add(r);
+                }
+            }
+            return capped;
+        }
 
         return matchedRecipes;
     }
@@ -390,13 +432,21 @@ public class RecipeService {
         return Map.of("success", true, "addedCount", added);
     }
 
-    private List<Map<String, Object>> fetchRecipes(SettingsDto settings) {
+    private List<Map<String, Object>> fetchRecipes(SettingsDto settings, boolean forceRefresh) {
         Map<String, Map<String, Object>> recipeMapByName = new LinkedHashMap<>();
 
-        // 1. Fetch from Mealie API if connected
+        // 1. Fetch from Mealie API if connected, or serve from local SQLite cache
         if (settingsService.hasMealieConnection()) {
-            List<Map<String, Object>> mealieApiRecipes = fetchRecipesFromMealieApi(settings);
+            List<Map<String, Object>> mealieApiRecipes = fetchRecipesFromMealieApi(settings, forceRefresh);
             for (Map<String, Object> r : mealieApiRecipes) {
+                String name = (String) r.get("name");
+                if (name != null && !name.isBlank()) {
+                    recipeMapByName.put(name.toLowerCase().trim(), r);
+                }
+            }
+        } else {
+            List<Map<String, Object>> fallback = getFallbackCachedRecipes();
+            for (Map<String, Object> r : fallback) {
                 String name = (String) r.get("name");
                 if (name != null && !name.isBlank()) {
                     recipeMapByName.put(name.toLowerCase().trim(), r);
@@ -448,7 +498,7 @@ public class RecipeService {
         return new ArrayList<>(recipeMapByName.values());
     }
 
-    private List<Map<String, Object>> fetchRecipesFromMealieApi(SettingsDto settings) {
+    private List<Map<String, Object>> fetchRecipesFromMealieApi(SettingsDto settings, boolean forceRefresh) {
         String url = settings.mealieBaseUrl();
         String token = settings.mealieApiToken();
 
@@ -456,157 +506,456 @@ public class RecipeService {
             return Collections.emptyList();
         }
 
+        long now = System.currentTimeMillis();
+
+        // 1. Check cooldown: if scanned recently and cache is non-empty, serve immediately
+        if (!forceRefresh && (now - lastMealieScanTime < SCAN_COOLDOWN_MS) && !recipeCache.isEmpty()) {
+            log.debug("Serving {} recipes from memory/SQLite cache (Mealie scan cooldown active)", recipeCache.size());
+            return recipeCache.values().stream()
+                    .map(CachedMealieRecipe::recipeData)
+                    .filter(r -> r.get("ingredients") != null && !((List<?>) r.get("ingredients")).isEmpty())
+                    .collect(Collectors.toList());
+        }
+
         try {
-            String listUrl = url.replaceAll("/+$", "") + "/api/recipes?perPage=50";
-            log.info("Fetching recipe summaries from Mealie API: {}", listUrl);
-            String json = restClient.get()
-                    .uri(listUrl)
-                    .header("Authorization", "Bearer " + token)
-                    .retrieve()
-                    .body(String.class);
+            int page = 1;
+            int perPage = 100;
+            int totalPages = 1;
+            List<JsonNode> allSummaries = new ArrayList<>();
+            Set<String> activeMealieSlugs = new HashSet<>();
 
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode itemsNode = root.has("items") ? root.get("items") : root;
+            while (page <= totalPages && page <= 200) { // Safety cap at 200 pages (20,000 recipes)
+                String listUrl = url.replaceAll("/+$", "") + "/api/recipes?page=" + page + "&perPage=" + perPage;
+                log.debug("Fetching recipe summaries page {}: {}", page, listUrl);
 
-            if (!itemsNode.isArray() || itemsNode.isEmpty()) {
-                log.info("No recipes returned from Mealie API list endpoint");
-                return Collections.emptyList();
+                String json;
+                try {
+                    json = restClient.get()
+                            .uri(listUrl)
+                            .header("Authorization", "Bearer " + token)
+                            .retrieve()
+                            .body(String.class);
+                } catch (Exception e) {
+                    log.warn("Failed to fetch Mealie recipe summaries on page {}: {}", page, e.getMessage());
+                    break;
+                }
+
+                if (json == null || json.isBlank()) break;
+                JsonNode root = objectMapper.readTree(json);
+                JsonNode itemsNode = root.has("items") ? root.get("items") : root;
+
+                if (!itemsNode.isArray() || itemsNode.isEmpty()) {
+                    break;
+                }
+
+                for (JsonNode item : itemsNode) {
+                    allSummaries.add(item);
+                    if (item.hasNonNull("slug")) {
+                        activeMealieSlugs.add(item.get("slug").asText());
+                    } else if (item.hasNonNull("id")) {
+                        activeMealieSlugs.add(item.get("id").asText());
+                    }
+                }
+
+                if (root.has("totalPages")) {
+                    totalPages = root.get("totalPages").asInt(1);
+                } else if (root.has("total_pages")) {
+                    totalPages = root.get("total_pages").asInt(1);
+                } else if (root.has("total")) {
+                    int total = root.get("total").asInt(0);
+                    totalPages = (int) Math.ceil((double) total / perPage);
+                } else {
+                    if (itemsNode.size() < perPage) {
+                        break;
+                    }
+                    totalPages = page + 1;
+                }
+
+                page++;
             }
 
-            long now = System.currentTimeMillis();
-            long ttlMs = 60 * 60 * 1000L; // 60-minute TTL
+            if (allSummaries.isEmpty()) {
+                log.info("No recipes returned from Mealie API list endpoint");
+                return getFallbackCachedRecipes();
+            }
 
-            List<JsonNode> summaries = new ArrayList<>();
-            itemsNode.forEach(summaries::add);
-
-            // Throttle parallel requests to Mealie to avoid overwhelming single-worker instances
-            Semaphore rateLimiter = new Semaphore(3);
-
-            // Fetch details with controlled concurrency and retry
-            List<CompletableFuture<Map<String, Object>>> futures = summaries.stream().map(r -> CompletableFuture.<Map<String, Object>>supplyAsync(() -> {
-                String id = r.hasNonNull("id") ? r.get("id").asText() : UUID.randomUUID().toString();
-                String name = r.hasNonNull("name") ? r.get("name").asText() : "Untitled Recipe";
-                String desc = r.hasNonNull("description") ? r.get("description").asText() : "";
-                String slug = r.hasNonNull("slug") ? r.get("slug").asText() : id;
-                String prepTime = null;
-                String cookTime = null;
-
-                // Check if summary already contains ingredients (if Mealie ever populates them)
-                List<String> ings = extractIngredientsFromRecipeNode(r);
-
-                if (ings.isEmpty()) {
-                    CachedMealieRecipe cached = recipeCache.get(slug);
-                    if (cached != null && (now - cached.timestamp() < ttlMs)) {
-                        return cached.recipeData();
+            // Clean up any deleted Mealie recipes from cache and DB
+            if (!activeMealieSlugs.isEmpty()) {
+                recipeCache.keySet().removeIf(slug -> {
+                    CachedMealieRecipe r = recipeCache.get(slug);
+                    if (r != null && "Mealie".equals(r.recipeData().get("source"))) {
+                        if (!activeMealieSlugs.contains(slug)) {
+                            if (cachedRecipeRepository != null) {
+                                cachedRecipeRepository.findBySlug(slug).ifPresent(cachedRecipeRepository::delete);
+                            }
+                            return true;
+                        }
                     }
+                    return false;
+                });
+            }
 
+            // Identify which recipes need detail fetching
+            List<JsonNode> needsFetch = new ArrayList<>();
+            List<Map<String, Object>> readyRecipes = new ArrayList<>();
+
+            for (JsonNode summary : allSummaries) {
+                String slug = summary.hasNonNull("slug") ? summary.get("slug").asText() : summary.path("id").asText();
+                String dateUpdated = extractDateUpdated(summary);
+
+                // Check if summary node itself contains ingredients
+                List<String> summaryIngs = extractIngredientsFromRecipeNode(summary);
+                if (!summaryIngs.isEmpty()) {
+                    Map<String, Object> rMap = buildRecipeMapFromNode(summary, summaryIngs, url);
+                    recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, rMap));
+                    persistToDb(rMap, dateUpdated);
+                    readyRecipes.add(rMap);
+                    continue;
+                }
+
+                CachedMealieRecipe cached = recipeCache.get(slug);
+                if (cached != null
+                        && cached.recipeData() != null
+                        && cached.recipeData().get("ingredients") != null
+                        && !((List<?>) cached.recipeData().get("ingredients")).isEmpty()) {
+
+                    if (dateUpdated != null && dateUpdated.equals(cached.dateUpdated())) {
+                        readyRecipes.add(cached.recipeData());
+                        continue;
+                    } else if (dateUpdated == null && !forceRefresh && (now - cached.timestamp() < (60 * 60 * 1000L))) {
+                        readyRecipes.add(cached.recipeData());
+                        continue;
+                    }
+                }
+
+                needsFetch.add(summary);
+            }
+
+            log.info("Mealie recipe sync: {} total summaries, {} already cached, {} need detail fetch",
+                    allSummaries.size(), readyRecipes.size(), needsFetch.size());
+
+            // Synchronously fetch up to 50 recipes so user gets immediate response
+            int syncLimit = 50;
+            List<JsonNode> syncBatch = needsFetch.size() <= syncLimit
+                    ? needsFetch
+                    : needsFetch.subList(0, syncLimit);
+            List<JsonNode> backgroundBatch = needsFetch.size() > syncLimit
+                    ? needsFetch.subList(syncLimit, needsFetch.size())
+                    : Collections.emptyList();
+
+            if (!syncBatch.isEmpty()) {
+                Semaphore rateLimiter = new Semaphore(3);
+                List<CompletableFuture<Map<String, Object>>> futures = syncBatch.stream().map(summary -> CompletableFuture.supplyAsync(() -> {
                     try {
                         rateLimiter.acquire();
+                        try {
+                            String dateUpdated = extractDateUpdated(summary);
+                            Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated);
+                            if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
+                                String slug = (String) detail.get("slug");
+                                recipeCache.put(slug, new CachedMealieRecipe(now, dateUpdated, detail));
+                                persistToDb(detail, dateUpdated);
+                                return detail;
+                            }
+                        } finally {
+                            rateLimiter.release();
+                        }
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return cached != null ? cached.recipeData() : Collections.emptyMap();
                     }
+                    return null;
+                })).toList();
 
-                    JsonNode detailRoot = null;
-                    int maxAttempts = 3;
+                for (CompletableFuture<Map<String, Object>> f : futures) {
                     try {
-                        String detailUrl = url.replaceAll("/+$", "") + "/api/recipes/" + slug;
-                        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                            try {
-                                String detailJson = restClient.get()
-                                        .uri(detailUrl)
-                                        .header("Authorization", "Bearer " + token)
-                                        .retrieve()
-                                        .body(String.class);
+                        Map<String, Object> r = f.join();
+                        if (r != null) {
+                            readyRecipes.add(r);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Error fetching recipe detail in sync batch: {}", e.getMessage());
+                    }
+                }
+            }
 
-                                if (detailJson != null && !detailJson.isBlank()) {
-                                    detailRoot = objectMapper.readTree(detailJson);
-                                    break;
-                                }
-                            } catch (Exception e) {
-                                if (attempt == maxAttempts) {
-                                    log.warn("Could not fetch recipe details for slug '{}' from Mealie after {} attempts: {}", slug, maxAttempts, e.getMessage());
-                                } else {
-                                    log.debug("Retry {}/{} for slug '{}' due to: {}", attempt, maxAttempts, slug, e.getMessage());
-                                    try {
-                                        Thread.sleep(150L * attempt);
-                                    } catch (InterruptedException ie) {
-                                        Thread.currentThread().interrupt();
-                                        break;
+            // If large catalog (e.g. 15,000 recipes), queue background worker for remaining items
+            if (!backgroundBatch.isEmpty() && isBackgroundSyncRunning.compareAndSet(false, true)) {
+                final List<JsonNode> toSync = new ArrayList<>(backgroundBatch);
+                log.info("Queued {} recipes for background synchronization into SQLite cache", toSync.size());
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        Semaphore bgLimiter = new Semaphore(2);
+                        int synced = 0;
+                        for (JsonNode summary : toSync) {
+                            if (Thread.currentThread().isInterrupted()) break;
+                            String slug = summary.hasNonNull("slug") ? summary.get("slug").asText() : summary.path("id").asText();
+                            String dateUpdated = extractDateUpdated(summary);
+
+                            CachedMealieRecipe existing = recipeCache.get(slug);
+                            if (existing != null && dateUpdated != null && dateUpdated.equals(existing.dateUpdated())
+                                    && existing.recipeData().get("ingredients") != null
+                                    && !((List<?>) existing.recipeData().get("ingredients")).isEmpty()) {
+                                continue;
+                            }
+
+                            try {
+                                bgLimiter.acquire();
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                            try {
+                                Map<String, Object> detail = fetchRecipeDetailWithRetry(url, token, summary, dateUpdated);
+                                if (detail != null && detail.get("ingredients") != null && !((List<?>) detail.get("ingredients")).isEmpty()) {
+                                    recipeCache.put(slug, new CachedMealieRecipe(System.currentTimeMillis(), dateUpdated, detail));
+                                    persistToDb(detail, dateUpdated);
+                                    synced++;
+                                    if (synced % 100 == 0) {
+                                        log.info("Background recipe sync progress: {}/{} ingested into SQLite", synced, toSync.size());
                                     }
                                 }
+                                Thread.sleep(60);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            } catch (Exception ex) {
+                                log.debug("Background recipe sync error for slug '{}': {}", slug, ex.getMessage());
+                            } finally {
+                                bgLimiter.release();
                             }
                         }
+                        log.info("Completed background recipe sync: {} new/updated recipes saved to SQLite", synced);
                     } finally {
-                        rateLimiter.release();
+                        isBackgroundSyncRunning.set(false);
                     }
+                });
+            }
 
-                    if (detailRoot != null) {
-                        ings = extractIngredientsFromRecipeNode(detailRoot);
-                        if (detailRoot.hasNonNull("name") && !detailRoot.path("name").asText().isBlank()) {
-                            name = detailRoot.get("name").asText();
-                        }
-                        if (detailRoot.hasNonNull("description")) {
-                            desc = detailRoot.get("description").asText();
-                        }
-                        if (detailRoot.hasNonNull("prepTime")) {
-                            prepTime = detailRoot.get("prepTime").asText();
-                        } else if (detailRoot.hasNonNull("prep_time")) {
-                            prepTime = detailRoot.get("prep_time").asText();
-                        }
-                        if (detailRoot.hasNonNull("performTime")) {
-                            cookTime = detailRoot.get("performTime").asText();
-                        } else if (detailRoot.hasNonNull("cookTime")) {
-                            cookTime = detailRoot.get("cookTime").asText();
-                        } else if (detailRoot.hasNonNull("perform_time")) {
-                            cookTime = detailRoot.get("perform_time").asText();
-                        } else if (detailRoot.hasNonNull("cook_time")) {
-                            cookTime = detailRoot.get("cook_time").asText();
-                        }
-                    } else if (cached != null && cached.recipeData() != null) {
-                        log.info("Mealie failed for slug '{}'; falling back to existing cached recipe details", slug);
-                        return cached.recipeData();
-                    }
-                }
+            lastMealieScanTime = now;
+            log.info("Serving {} complete recipes with ingredients from Mealie (API + Cache)", readyRecipes.size());
+            return readyRecipes;
 
-                Map<String, Object> recipeMap = new HashMap<>();
-                recipeMap.put("id", id);
-                recipeMap.put("name", name);
-                recipeMap.put("description", desc);
-                recipeMap.put("source", "Mealie");
-                recipeMap.put("slug", slug);
-                recipeMap.put("ingredients", ings);
-                if (url != null && !url.isBlank()) {
-                    recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
-                }
-                if (prepTime != null && !prepTime.isBlank()) {
-                    recipeMap.put("prepTime", prepTime);
-                }
-                if (cookTime != null && !cookTime.isBlank()) {
-                    recipeMap.put("cookTime", cookTime);
-                }
-
-                if (!ings.isEmpty()) {
-                    recipeCache.put(slug, new CachedMealieRecipe(now, recipeMap));
-                }
-
-                return recipeMap;
-            })).toList();
-
-            List<Map<String, Object>> list = futures.stream()
-                    .map(CompletableFuture::join)
-                    .filter(rm -> {
-                        @SuppressWarnings("unchecked")
-                        List<String> ingList = (List<String>) rm.get("ingredients");
-                        return ingList != null && !ingList.isEmpty();
-                    })
-                    .collect(Collectors.toList());
-
-            log.info("Fetched {} complete recipes with ingredients from Mealie API", list.size());
-            return list;
         } catch (Exception e) {
-            log.warn("Could not fetch recipes from Mealie API: {}", e.getMessage());
-            return Collections.emptyList();
+            log.warn("Could not fetch recipes from Mealie API: {}. Falling back to cached recipes.", e.getMessage());
+            return getFallbackCachedRecipes();
+        }
+    }
+
+    private List<Map<String, Object>> getFallbackCachedRecipes() {
+        if (!recipeCache.isEmpty()) {
+            return recipeCache.values().stream()
+                    .map(CachedMealieRecipe::recipeData)
+                    .filter(r -> r.get("ingredients") != null && !((List<?>) r.get("ingredients")).isEmpty())
+                    .collect(Collectors.toList());
+        }
+        if (cachedRecipeRepository != null) {
+            try {
+                return cachedRecipeRepository.findAll().stream()
+                        .map(this::toRecipeMap)
+                        .filter(Objects::nonNull)
+                        .filter(r -> r.get("ingredients") != null && !((List<?>) r.get("ingredients")).isEmpty())
+                        .collect(Collectors.toList());
+            } catch (Exception ex) {
+                log.warn("Could not load fallback recipes from repository: {}", ex.getMessage());
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    private String extractDateUpdated(JsonNode node) {
+        if (node == null) return null;
+        if (node.hasNonNull("dateUpdated") && !node.get("dateUpdated").asText().isBlank()) {
+            return node.get("dateUpdated").asText().trim();
+        }
+        if (node.hasNonNull("date_updated") && !node.get("date_updated").asText().isBlank()) {
+            return node.get("date_updated").asText().trim();
+        }
+        if (node.hasNonNull("updatedAt") && !node.get("updatedAt").asText().isBlank()) {
+            return node.get("updatedAt").asText().trim();
+        }
+        if (node.hasNonNull("update_at") && !node.get("update_at").asText().isBlank()) {
+            return node.get("update_at").asText().trim();
+        }
+        if (node.hasNonNull("lastModified") && !node.get("lastModified").asText().isBlank()) {
+            return node.get("lastModified").asText().trim();
+        }
+        return null;
+    }
+
+    private Map<String, Object> fetchRecipeDetailWithRetry(String url, String token, JsonNode summary, String dateUpdated) {
+        String id = summary.hasNonNull("id") ? summary.get("id").asText() : UUID.randomUUID().toString();
+        String name = summary.hasNonNull("name") ? summary.get("name").asText() : "Untitled Recipe";
+        String desc = summary.hasNonNull("description") ? summary.get("description").asText() : "";
+        String slug = summary.hasNonNull("slug") ? summary.get("slug").asText() : id;
+        String prepTime = null;
+        String cookTime = null;
+
+        JsonNode detailRoot = null;
+        int maxAttempts = 3;
+        String detailUrl = url.replaceAll("/+$", "") + "/api/recipes/" + slug;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                String detailJson = restClient.get()
+                        .uri(detailUrl)
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve()
+                        .body(String.class);
+
+                if (detailJson != null && !detailJson.isBlank()) {
+                    detailRoot = objectMapper.readTree(detailJson);
+                    break;
+                }
+            } catch (Exception e) {
+                if (attempt == maxAttempts) {
+                    log.warn("Could not fetch recipe details for slug '{}' from Mealie after {} attempts: {}", slug, maxAttempts, e.getMessage());
+                } else {
+                    log.debug("Retry {}/{} for slug '{}' due to: {}", attempt, maxAttempts, slug, e.getMessage());
+                    try {
+                        Thread.sleep(150L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+
+        List<String> ings = Collections.emptyList();
+        if (detailRoot != null) {
+            ings = extractIngredientsFromRecipeNode(detailRoot);
+            if (detailRoot.hasNonNull("name") && !detailRoot.path("name").asText().isBlank()) {
+                name = detailRoot.get("name").asText();
+            }
+            if (detailRoot.hasNonNull("description")) {
+                desc = detailRoot.get("description").asText();
+            }
+            if (detailRoot.hasNonNull("prepTime")) {
+                prepTime = detailRoot.get("prepTime").asText();
+            } else if (detailRoot.hasNonNull("prep_time")) {
+                prepTime = detailRoot.get("prep_time").asText();
+            }
+            if (detailRoot.hasNonNull("performTime")) {
+                cookTime = detailRoot.get("performTime").asText();
+            } else if (detailRoot.hasNonNull("cookTime")) {
+                cookTime = detailRoot.get("cookTime").asText();
+            } else if (detailRoot.hasNonNull("perform_time")) {
+                cookTime = detailRoot.get("perform_time").asText();
+            } else if (detailRoot.hasNonNull("cook_time")) {
+                cookTime = detailRoot.get("cook_time").asText();
+            }
+        } else {
+            CachedMealieRecipe cached = recipeCache.get(slug);
+            if (cached != null && cached.recipeData() != null) {
+                return cached.recipeData();
+            }
+        }
+
+        Map<String, Object> recipeMap = new HashMap<>();
+        recipeMap.put("id", id);
+        recipeMap.put("name", name);
+        recipeMap.put("description", desc);
+        recipeMap.put("source", "Mealie");
+        recipeMap.put("slug", slug);
+        recipeMap.put("ingredients", ings);
+        if (url != null && !url.isBlank()) {
+            recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
+        }
+        if (prepTime != null && !prepTime.isBlank()) {
+            recipeMap.put("prepTime", prepTime);
+        }
+        if (cookTime != null && !cookTime.isBlank()) {
+            recipeMap.put("cookTime", cookTime);
+        }
+
+        return recipeMap;
+    }
+
+    private Map<String, Object> buildRecipeMapFromNode(JsonNode node, List<String> ings, String url) {
+        String id = node.hasNonNull("id") ? node.get("id").asText() : UUID.randomUUID().toString();
+        String name = node.hasNonNull("name") ? node.get("name").asText() : "Untitled Recipe";
+        String desc = node.hasNonNull("description") ? node.get("description").asText() : "";
+        String slug = node.hasNonNull("slug") ? node.get("slug").asText() : id;
+        String prepTime = node.hasNonNull("prepTime") ? node.get("prepTime").asText() : (node.hasNonNull("prep_time") ? node.get("prep_time").asText() : null);
+        String cookTime = node.hasNonNull("performTime") ? node.get("performTime").asText() : (node.hasNonNull("cookTime") ? node.get("cookTime").asText() : null);
+
+        Map<String, Object> recipeMap = new HashMap<>();
+        recipeMap.put("id", id);
+        recipeMap.put("name", name);
+        recipeMap.put("description", desc);
+        recipeMap.put("source", "Mealie");
+        recipeMap.put("slug", slug);
+        recipeMap.put("ingredients", ings);
+        if (url != null && !url.isBlank()) {
+            recipeMap.put("recipeUrl", url.replaceAll("/+$", "") + "/recipes/" + slug);
+        }
+        if (prepTime != null && !prepTime.isBlank()) {
+            recipeMap.put("prepTime", prepTime);
+        }
+        if (cookTime != null && !cookTime.isBlank()) {
+            recipeMap.put("cookTime", cookTime);
+        }
+        return recipeMap;
+    }
+
+    private Map<String, Object> toRecipeMap(CachedRecipe cr) {
+        if (cr == null) return null;
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", cr.getId());
+        map.put("name", cr.getName());
+        map.put("description", cr.getDescription() != null ? cr.getDescription() : "");
+        map.put("source", cr.getSource() != null ? cr.getSource() : "Mealie");
+        map.put("slug", cr.getSlug());
+        map.put("recipeUrl", cr.getRecipeUrl());
+        if (cr.getPrepTime() != null) map.put("prepTime", cr.getPrepTime());
+        if (cr.getCookTime() != null) map.put("cookTime", cr.getCookTime());
+
+        List<String> ings = Collections.emptyList();
+        if (cr.getIngredientsJson() != null && !cr.getIngredientsJson().isBlank()) {
+            try {
+                ings = objectMapper.readValue(cr.getIngredientsJson(), new TypeReference<List<String>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse cached ingredients for slug '{}': {}", cr.getSlug(), e.getMessage());
+            }
+        }
+        map.put("ingredients", ings);
+        return map;
+    }
+
+    private void persistToDb(Map<String, Object> recipeMap, String dateUpdated) {
+        if (cachedRecipeRepository == null || recipeMap == null) return;
+        try {
+            String slug = (String) recipeMap.get("slug");
+            String id = (String) recipeMap.get("id");
+            if (id == null || id.isBlank()) {
+                id = (slug != null && !slug.isBlank()) ? slug : UUID.randomUUID().toString();
+            }
+
+            if (slug != null) {
+                Optional<CachedRecipe> existing = cachedRecipeRepository.findBySlug(slug);
+                if (existing.isPresent()) {
+                    id = existing.get().getId();
+                }
+            }
+
+            String name = (String) recipeMap.get("name");
+            String desc = (String) recipeMap.get("description");
+            String source = (String) recipeMap.get("source");
+            String recipeUrl = (String) recipeMap.get("recipeUrl");
+            String prepTime = (String) recipeMap.get("prepTime");
+            String cookTime = (String) recipeMap.get("cookTime");
+
+            @SuppressWarnings("unchecked")
+            List<String> ings = (List<String>) recipeMap.get("ingredients");
+            String ingsJson = (ings != null && !ings.isEmpty()) ? objectMapper.writeValueAsString(ings) : "[]";
+
+            CachedRecipe cr = new CachedRecipe(
+                    id, slug, name, desc, source, recipeUrl, prepTime, cookTime,
+                    dateUpdated, ingsJson, System.currentTimeMillis()
+            );
+            cachedRecipeRepository.save(cr);
+        } catch (Exception e) {
+            log.warn("Could not persist recipe '{}' to SQLite: {}", recipeMap.get("name"), e.getMessage());
         }
     }
 
