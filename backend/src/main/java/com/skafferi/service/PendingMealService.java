@@ -61,16 +61,56 @@ public class PendingMealService {
             throw new IllegalArgumentException("Recipe payload cannot be empty");
         }
 
-        // Unwrap if nested (e.g. { "recipe": { ... } } or { "data": { ... } })
-        if (root.hasNonNull("recipe") && root.get("recipe").isObject()) {
-            root = root.get("recipe");
-        } else if (root.hasNonNull("data") && root.get("data").isObject()) {
-            root = root.get("data");
+        List<String> topKeys = new ArrayList<>();
+        root.fieldNames().forEachRemaining(topKeys::add);
+        log.info("Received recipe JSON payload with root fields: {}", topKeys);
+
+        // Extract scale multiplier if sent by Mealie (e.g. { "recipe_scale": 1.0 })
+        Double recipeScale = null;
+        if (root.hasNonNull("recipe_scale") && root.get("recipe_scale").isNumber()) {
+            recipeScale = root.get("recipe_scale").asDouble();
+        } else if (root.hasNonNull("recipeScale") && root.get("recipeScale").isNumber()) {
+            recipeScale = root.get("recipeScale").asDouble();
         }
 
-        String recipeName = parseRecipeName(root);
+        // Extract action title/name if available as fallback (e.g. { "action": { "title": "Cook with Skafferi" } })
+        String actionTitle = null;
+        if (root.hasNonNull("action") && root.get("action").isObject()) {
+            JsonNode act = root.get("action");
+            if (act.hasNonNull("title") && !act.path("title").asText().isBlank()) {
+                actionTitle = act.path("title").asText().trim();
+            } else if (act.hasNonNull("name") && !act.path("name").asText().isBlank()) {
+                actionTitle = act.path("name").asText().trim();
+            }
+        }
+
+        // Unwrap nested recipe payload:
+        // Mealie Custom Recipe Actions wrap recipe in "content": { "action": {...}, "content": {...}, "recipe_scale": 1.0 }
+        // Mealie webhooks/integrations wrap in "recipe", "data", "payload", "item"
+        while (true) {
+            if (root.hasNonNull("content") && root.get("content").isObject()) {
+                root = root.get("content");
+            } else if (root.hasNonNull("recipe") && root.get("recipe").isObject()) {
+                root = root.get("recipe");
+            } else if (root.hasNonNull("data") && root.get("data").isObject()) {
+                root = root.get("data");
+            } else if (root.hasNonNull("payload") && root.get("payload").isObject()) {
+                root = root.get("payload");
+            } else if (root.hasNonNull("item") && root.get("item").isObject()) {
+                root = root.get("item");
+            } else {
+                break;
+            }
+        }
+
+        String recipeName = parseRecipeName(root, actionTitle);
         String recipeId = parseRecipeId(root);
         Double servings = parseServings(root);
+
+        if (recipeScale != null && recipeScale > 0 && recipeScale != 1.0) {
+            servings = servings * recipeScale;
+            log.info("Applied recipe scale multiplier {} -> scaled servings to {}", recipeScale, servings);
+        }
 
         log.info("Processing recipe action from Mealie: '{}' (ID: {}, Servings: {})",
                 recipeName, recipeId, servings);
@@ -82,20 +122,32 @@ public class PendingMealService {
         List<Item> allItems = itemRepository.findAll();
 
         JsonNode ingredientsNode = null;
-        if (root.has("recipeIngredient") && root.get("recipeIngredient").isArray()) {
+        if (root.has("recipe_ingredient") && root.get("recipe_ingredient").isArray()) {
+            ingredientsNode = root.get("recipe_ingredient");
+        } else if (root.has("recipeIngredient") && root.get("recipeIngredient").isArray()) {
             ingredientsNode = root.get("recipeIngredient");
         } else if (root.has("ingredients") && root.get("ingredients").isArray()) {
             ingredientsNode = root.get("ingredients");
-        } else if (root.has("recipe_ingredient") && root.get("recipe_ingredient").isArray()) {
-            ingredientsNode = root.get("recipe_ingredient");
+        } else if (root.has("recipeIngredients") && root.get("recipeIngredients").isArray()) {
+            ingredientsNode = root.get("recipeIngredients");
+        } else if (root.has("recipe_ingredients") && root.get("recipe_ingredients").isArray()) {
+            ingredientsNode = root.get("recipe_ingredients");
         }
 
         if (ingredientsNode != null) {
             for (JsonNode ingNode : ingredientsNode) {
-                // Skip section headers in Mealie: { "title": "For the crust", "isFood": false }
-                if (ingNode.has("isFood") && !ingNode.get("isFood").asBoolean()) {
+                // Skip section headers in Mealie: { "title": "For the crust", "isFood": false } or { "is_food": false }
+                boolean isFood = true;
+                if (ingNode.has("is_food")) {
+                    isFood = ingNode.get("is_food").asBoolean(true);
+                } else if (ingNode.has("isFood")) {
+                    isFood = ingNode.get("isFood").asBoolean(true);
+                }
+
+                if (!isFood) {
                     boolean hasFood = (ingNode.hasNonNull("food") && !ingNode.path("food").asText().isBlank())
-                            || (ingNode.hasNonNull("foodName") && !ingNode.path("foodName").asText().isBlank());
+                            || (ingNode.hasNonNull("foodName") && !ingNode.path("foodName").asText().isBlank())
+                            || (ingNode.hasNonNull("food_name") && !ingNode.path("food_name").asText().isBlank());
                     if (!hasFood) {
                         continue;
                     }
@@ -118,15 +170,21 @@ public class PendingMealService {
                         foodName = ingNode.path("food").path("name").asText(null);
                     } else if (ingNode.path("food").isTextual()) {
                         foodName = ingNode.path("food").asText(null);
-                    } else if (ingNode.hasNonNull("foodName")) {
+                    } else if (ingNode.hasNonNull("foodName") && !ingNode.path("foodName").asText().isBlank()) {
                         foodName = ingNode.path("foodName").asText(null);
+                    } else if (ingNode.hasNonNull("food_name") && !ingNode.path("food_name").asText().isBlank()) {
+                        foodName = ingNode.path("food_name").asText(null);
                     }
 
-                    // 2. Display / Raw text
+                    // 2. Display / Raw text / Original text
                     if (ingNode.hasNonNull("display") && !ingNode.path("display").asText().isBlank()) {
                         rawText = ingNode.path("display").asText().trim();
+                    } else if (ingNode.hasNonNull("original_text") && !ingNode.path("original_text").asText().isBlank()) {
+                        rawText = ingNode.path("original_text").asText().trim();
                     } else if (ingNode.hasNonNull("originalText") && !ingNode.path("originalText").asText().isBlank()) {
                         rawText = ingNode.path("originalText").asText().trim();
+                    } else if (ingNode.hasNonNull("raw_text") && !ingNode.path("raw_text").asText().isBlank()) {
+                        rawText = ingNode.path("raw_text").asText().trim();
                     } else if (ingNode.hasNonNull("rawText") && !ingNode.path("rawText").asText().isBlank()) {
                         rawText = ingNode.path("rawText").asText().trim();
                     }
@@ -137,8 +195,15 @@ public class PendingMealService {
                         if (unit.isBlank()) {
                             unit = ingNode.path("unit").path("abbreviation").asText("");
                         }
+                        if (unit.isBlank()) {
+                            unit = ingNode.path("unit").path("plural_name").asText("");
+                        }
                     } else if (ingNode.path("unit").isTextual()) {
                         unit = ingNode.path("unit").asText("");
+                    } else if (ingNode.hasNonNull("unitName")) {
+                        unit = ingNode.path("unitName").asText("");
+                    } else if (ingNode.hasNonNull("unit_name")) {
+                        unit = ingNode.path("unit_name").asText("");
                     }
 
                     // 4. Quantity
@@ -150,11 +215,40 @@ public class PendingMealService {
                                 quantity = parseQuantityString(ingNode.path("quantity").asText());
                             } catch (Exception ignored) {}
                         }
+                    } else if (ingNode.hasNonNull("amount")) {
+                        if (ingNode.path("amount").isNumber()) {
+                            quantity = ingNode.path("amount").asDouble();
+                        } else if (ingNode.path("amount").isTextual()) {
+                            try {
+                                quantity = parseQuantityString(ingNode.path("amount").asText());
+                            } catch (Exception ignored) {}
+                        }
                     }
 
-                    // Fallback to note if foodName is still empty
+                    // Fallback to note if foodName is still empty (Mealie often puts ingredient note/name here)
                     if ((foodName == null || foodName.isBlank()) && ingNode.hasNonNull("note") && !ingNode.path("note").asText().isBlank()) {
                         foodName = ingNode.path("note").asText().trim();
+                    }
+
+                    // Fallback to title if foodName is still empty
+                    if ((foodName == null || foodName.isBlank()) && ingNode.hasNonNull("title") && !ingNode.path("title").asText().isBlank()) {
+                        foodName = ingNode.path("title").asText().trim();
+                    }
+
+                    // If foodName is still blank, parse from display / rawText
+                    if ((foodName == null || foodName.isBlank()) && rawText != null && !rawText.isBlank()) {
+                        ParsedIngredient parsed = parseIngredientText(rawText);
+                        if (!parsed.foodName().isBlank()) {
+                            foodName = parsed.foodName();
+                            if ((quantity == null || quantity <= 0 || quantity == 1.0) && parsed.quantity() > 0) {
+                                quantity = parsed.quantity();
+                            }
+                            if (unit.isBlank() && !parsed.unit().isBlank()) {
+                                unit = parsed.unit();
+                            }
+                        } else {
+                            foodName = rawText;
+                        }
                     }
                 }
 
@@ -170,6 +264,11 @@ public class PendingMealService {
                     rawText = (quantity != null && quantity > 0 ? quantity + " " : "") +
                             (!unit.isBlank() ? unit + " " : "") +
                             foodName;
+                }
+
+                // Apply recipe scale if present
+                if (recipeScale != null && recipeScale > 0 && recipeScale != 1.0 && quantity != null) {
+                    quantity = quantity * recipeScale;
                 }
 
                 if (quantity == null || quantity <= 0) {
@@ -205,36 +304,68 @@ public class PendingMealService {
         return saved;
     }
 
-    private String parseRecipeName(JsonNode root) {
+    private String parseRecipeName(JsonNode root, String fallbackTitle) {
         if (root.hasNonNull("name") && !root.path("name").asText().isBlank()) {
             return root.path("name").asText().trim();
         }
         if (root.hasNonNull("recipeName") && !root.path("recipeName").asText().isBlank()) {
             return root.path("recipeName").asText().trim();
         }
+        if (root.hasNonNull("recipe_name") && !root.path("recipe_name").asText().isBlank()) {
+            return root.path("recipe_name").asText().trim();
+        }
         if (root.hasNonNull("title") && !root.path("title").asText().isBlank()) {
             return root.path("title").asText().trim();
         }
+        if (root.hasNonNull("slug") && !root.path("slug").asText().isBlank()) {
+            return formatSlugAsTitle(root.path("slug").asText().trim());
+        }
+        if (fallbackTitle != null && !fallbackTitle.isBlank()) {
+            return fallbackTitle;
+        }
         return "Mealie Recipe";
+    }
+
+    private String formatSlugAsTitle(String slug) {
+        if (slug == null || slug.isBlank()) return "Mealie Recipe";
+        String[] words = slug.replace("-", " ").replace("_", " ").split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) {
+                if (sb.length() > 0) sb.append(" ");
+                sb.append(Character.toUpperCase(w.charAt(0)));
+                if (w.length() > 1) sb.append(w.substring(1).toLowerCase());
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : slug;
     }
 
     private String parseRecipeId(JsonNode root) {
         if (root.hasNonNull("id") && !root.path("id").asText().isBlank()) {
             return root.path("id").asText().trim();
         }
-        if (root.hasNonNull("slug") && !root.path("slug").asText().isBlank()) {
-            return root.path("slug").asText().trim();
+        if (root.hasNonNull("recipe_id") && !root.path("recipe_id").asText().isBlank()) {
+            return root.path("recipe_id").asText().trim();
         }
         if (root.hasNonNull("recipeId") && !root.path("recipeId").asText().isBlank()) {
             return root.path("recipeId").asText().trim();
+        }
+        if (root.hasNonNull("slug") && !root.path("slug").asText().isBlank()) {
+            return root.path("slug").asText().trim();
         }
         return null;
     }
 
     private Double parseServings(JsonNode root) {
         JsonNode node = null;
-        if (root.hasNonNull("recipeYield")) node = root.get("recipeYield");
+        if (root.hasNonNull("recipe_servings")) node = root.get("recipe_servings");
+        else if (root.hasNonNull("recipeServings")) node = root.get("recipeServings");
+        else if (root.hasNonNull("recipe_yield_quantity")) node = root.get("recipe_yield_quantity");
+        else if (root.hasNonNull("recipeYieldQuantity")) node = root.get("recipeYieldQuantity");
+        else if (root.hasNonNull("recipe_yield")) node = root.get("recipe_yield");
+        else if (root.hasNonNull("recipeYield")) node = root.get("recipeYield");
         else if (root.hasNonNull("yieldQuantity")) node = root.get("yieldQuantity");
+        else if (root.hasNonNull("yield_quantity")) node = root.get("yield_quantity");
         else if (root.hasNonNull("servings")) node = root.get("servings");
         else if (root.hasNonNull("yield")) node = root.get("yield");
 

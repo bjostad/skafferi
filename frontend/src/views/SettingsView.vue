@@ -1828,36 +1828,52 @@ async function sendSampleRecipeAction() {
       id: 'sample-' + Date.now(),
       name: 'Creamy Tuscan Garlic Chicken',
       slug: 'creamy-tuscan-garlic-chicken',
-      recipeYield: '4 servings',
-      recipeIngredient: [
+      recipe_servings: 4,
+      recipe_yield: '4 servings',
+      recipe_ingredient: [
         {
           food: { name: 'Chicken Breast' },
           unit: { name: 'lbs' },
           quantity: 1.5,
-          display: '1.5 lbs Chicken Breast, boneless'
+          display: '1.5 lbs Chicken Breast, boneless',
+          is_food: true
         },
         {
           food: { name: 'Heavy Cream' },
           unit: { name: 'cup' },
           quantity: 1.0,
-          display: '1 cup Heavy Cream'
+          display: '1 cup Heavy Cream',
+          is_food: true
         },
         {
           food: { name: 'Garlic' },
           unit: { name: 'cloves' },
           quantity: 3.0,
-          display: '3 cloves Garlic, minced'
+          display: '3 cloves Garlic, minced',
+          is_food: true
         },
         {
           food: { name: 'Baby Spinach' },
           unit: { name: 'cups' },
           quantity: 2.0,
-          display: '2 cups Baby Spinach'
+          display: '2 cups Baby Spinach',
+          is_food: true
         }
       ]
     };
 
-    await api.triggerRecipeAction(sampleRecipe);
+    const mealieActionPayload = {
+      action: {
+        id: 'action-sample',
+        action_type: 'post',
+        title: `Cook with ${currentAppName.value}`,
+        url: `${currentOrigin.value}/api/recipes/action`
+      },
+      content: sampleRecipe,
+      recipe_scale: 1.0
+    };
+
+    await api.triggerRecipeAction(mealieActionPayload);
     showToast(`Sample recipe "${sampleRecipe.name}" queued! Check Recipes > Cooked Meals Queue.`);
     window.dispatchEvent(new CustomEvent('pending-meals-changed'));
   } catch (err) {

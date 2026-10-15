@@ -277,4 +277,91 @@ public class PendingMealServiceTest {
         // When auto deduct is enabled, reconcileMeal should have been called
         verify(inventoryService).deductFifo(eq(cheese), eq(2.0));
     }
+
+    @Test
+    void testQueueMealFromMealieCustomRecipeActionPayload_ContentWrapperAndScale() throws Exception {
+        Item chickenItem = new Item();
+        chickenItem.setId("item-chicken");
+        chickenItem.setName("Chicken Breast");
+        chickenItem.setDefaultUnit("lbs");
+
+        Item creamItem = new Item();
+        creamItem.setId("item-cream");
+        creamItem.setName("Heavy Cream");
+        creamItem.setDefaultUnit("cup");
+
+        when(itemRepository.findAll()).thenReturn(List.of(chickenItem, creamItem));
+
+        String json = """
+        {
+            "action": {
+                "id": "action-123",
+                "action_type": "post",
+                "title": "Cook with Skafferi",
+                "url": "http://localhost:8080/api/recipes/action"
+            },
+            "content": {
+                "id": "recipe-uuid-789",
+                "name": "Chicken Tikka Masala",
+                "slug": "chicken-tikka-masala",
+                "recipe_servings": 4.0,
+                "recipe_ingredient": [
+                    {
+                        "title": null,
+                        "note": "boneless skinless chicken breasts, cubed",
+                        "unit": { "name": "pound", "abbreviation": "lb" },
+                        "food": { "name": "chicken breast" },
+                        "quantity": 1.5,
+                        "display": "1.5 lbs chicken breast",
+                        "is_food": true
+                    },
+                    {
+                        "title": "For the sauce",
+                        "note": null,
+                        "unit": null,
+                        "food": null,
+                        "is_food": false
+                    },
+                    {
+                        "title": null,
+                        "note": "heavy cream",
+                        "unit": { "name": "cup" },
+                        "food": null,
+                        "quantity": 1.0,
+                        "display": "1 cup heavy cream",
+                        "is_food": true
+                    }
+                ]
+            },
+            "recipe_scale": 2.0
+        }
+        """;
+
+        JsonNode root = objectMapper.readTree(json);
+        PendingCookedMeal meal = pendingMealService.queueMealFromRecipeJson(root);
+
+        assertEquals("Chicken Tikka Masala", meal.getRecipeName());
+        assertEquals("recipe-uuid-789", meal.getRecipeId());
+        // 4 servings scaled 2x = 8
+        assertEquals(8.0, meal.getServings());
+        // Section header excluded, 2 real ingredients
+        assertEquals(2, meal.getItems().size());
+
+        PendingMealItem item1 = meal.getItems().get(0);
+        assertEquals("chicken breast", item1.getFoodName());
+        // 1.5 scaled 2x = 3.0
+        assertEquals(3.0, item1.getOriginalQuantity());
+        assertEquals("pound", item1.getOriginalUnit());
+        assertNotNull(item1.getMatchedItem());
+        assertEquals("item-chicken", item1.getMatchedItem().getId());
+
+        PendingMealItem item2 = meal.getItems().get(1);
+        // Extracted from note when food is null
+        assertEquals("heavy cream", item2.getFoodName());
+        // 1.0 scaled 2x = 2.0
+        assertEquals(2.0, item2.getOriginalQuantity());
+        assertEquals("cup", item2.getOriginalUnit());
+        assertNotNull(item2.getMatchedItem());
+        assertEquals("item-cream", item2.getMatchedItem().getId());
+    }
 }
