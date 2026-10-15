@@ -2,10 +2,13 @@ package com.skafferi.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skafferi.domain.PendingCookedMeal;
+import com.skafferi.domain.PendingMealItem;
 import com.skafferi.dto.NotificationSummaryDto;
 import com.skafferi.dto.PantryItemSummaryDto;
 import com.skafferi.dto.SettingsDto;
 import com.skafferi.repository.ItemRepository;
+import com.skafferi.repository.PendingCookedMealRepository;
 import com.skafferi.util.IngredientMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,24 +29,35 @@ public class RecipeService {
     private final InventoryService inventoryService;
     private final BringSyncService bringSyncService;
     private final ItemRepository itemRepository;
+    private final PendingCookedMealRepository pendingMealRepository;
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+
+    private final Map<String, CachedMealieRecipe> recipeCache = new ConcurrentHashMap<>();
+
+    private record CachedMealieRecipe(long timestamp, Map<String, Object> recipeData) {}
 
     public RecipeService(SettingsService settingsService,
                          InventoryService inventoryService,
                          BringSyncService bringSyncService,
-                         ItemRepository itemRepository) {
+                         ItemRepository itemRepository,
+                         @org.springframework.beans.factory.annotation.Autowired(required = false) PendingCookedMealRepository pendingMealRepository) {
         this.settingsService = settingsService;
         this.inventoryService = inventoryService;
         this.bringSyncService = bringSyncService;
         this.itemRepository = itemRepository;
+        this.pendingMealRepository = pendingMealRepository;
         this.restClient = RestClient.builder().build();
         this.objectMapper = new ObjectMapper();
     }
 
     public List<Map<String, Object>> getMatchingRecipes() {
-        if (!settingsService.hasMealieConnection()) {
-            return Collections.emptyList();
+        return getMatchingRecipes(false);
+    }
+
+    public List<Map<String, Object>> getMatchingRecipes(boolean forceRefresh) {
+        if (forceRefresh) {
+            recipeCache.clear();
         }
 
         SettingsDto rawSettings = settingsService.getRawSettings();
@@ -62,7 +78,10 @@ public class RecipeService {
         notifs.expiredItems().forEach(i -> expiringNames.add(i.name()));
         notifs.freshCheckItems().forEach(i -> expiringNames.add(i.name()));
 
-        List<Map<String, Object>> allRecipes = fetchRecipesFromMealieOrPresets(rawSettings);
+        List<Map<String, Object>> allRecipes = fetchRecipes(rawSettings);
+        if (allRecipes.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         List<Map<String, Object>> matchedRecipes = new ArrayList<>();
 
@@ -362,64 +381,216 @@ public class RecipeService {
         return Map.of("success", true, "addedCount", added);
     }
 
-    private List<Map<String, Object>> fetchRecipesFromMealieOrPresets(SettingsDto settings) {
-        String url = settings.mealieBaseUrl();
-        String token = settings.mealieApiToken();
+    private List<Map<String, Object>> fetchRecipes(SettingsDto settings) {
+        Map<String, Map<String, Object>> recipeMapByName = new LinkedHashMap<>();
 
-        if (url != null && !url.isBlank() && token != null && !token.isBlank()) {
-            try {
-                String fullUrl = url.replaceAll("/+$", "") + "/api/recipes";
-                String json = restClient.get()
-                        .uri(fullUrl)
-                        .header("Authorization", "Bearer " + token)
-                        .retrieve()
-                        .body(String.class);
-
-                JsonNode root = objectMapper.readTree(json);
-                JsonNode itemsNode = root.has("items") ? root.get("items") : root;
-
-                if (itemsNode.isArray() && itemsNode.size() > 0) {
-                    List<Map<String, Object>> list = new ArrayList<>();
-                    for (JsonNode r : itemsNode) {
-                        String id = r.has("id") ? r.get("id").asText() : UUID.randomUUID().toString();
-                        String name = r.has("name") ? r.get("name").asText() : "Untitled Recipe";
-                        String desc = r.has("description") ? r.get("description").asText() : "";
-                        String slug = r.has("slug") ? r.get("slug").asText() : id;
-
-                        List<String> ings = new ArrayList<>();
-                        if (r.has("recipeIngredient")) {
-                            for (JsonNode ing : r.get("recipeIngredient")) {
-                                if (ing.has("food") && ing.get("food").has("name") && !ing.get("food").get("name").asText().isBlank()) {
-                                    ings.add(ing.get("food").get("name").asText());
-                                } else if (ing.has("note") && !ing.get("note").asText().isBlank()) {
-                                    ings.add(ing.get("note").asText());
-                                } else if (ing.has("title") && !ing.get("title").asText().isBlank()) {
-                                    ings.add(ing.get("title").asText());
-                                } else if (ing.isTextual()) {
-                                    ings.add(ing.asText());
-                                }
-                            }
-                        }
-
-                        list.add(Map.of(
-                                "id", id,
-                                "name", name,
-                                "description", desc,
-                                "source", "Mealie",
-                                "slug", slug,
-                                "ingredients", ings
-                        ));
-                    }
-                    if (!list.isEmpty()) {
-                        return list;
-                    }
+        // 1. Fetch from Mealie API if connected
+        if (settingsService.hasMealieConnection()) {
+            List<Map<String, Object>> mealieApiRecipes = fetchRecipesFromMealieApi(settings);
+            for (Map<String, Object> r : mealieApiRecipes) {
+                String name = (String) r.get("name");
+                if (name != null && !name.isBlank()) {
+                    recipeMapByName.put(name.toLowerCase().trim(), r);
                 }
-            } catch (Exception e) {
-                log.warn("Could not fetch recipes from Mealie: {}", e.getMessage());
             }
         }
 
-        return Collections.emptyList();
+        // 2. Also merge recipes from local PendingCookedMeals (recipes submitted via Mealie Recipe Action or Webhooks)
+        if (pendingMealRepository != null) {
+            try {
+                List<PendingCookedMeal> localMeals = pendingMealRepository.findAll();
+                for (PendingCookedMeal m : localMeals) {
+                    if (m.getRecipeName() == null || m.getRecipeName().isBlank() || "Mealie Recipe".equalsIgnoreCase(m.getRecipeName())) {
+                        continue;
+                    }
+                    String key = m.getRecipeName().toLowerCase().trim();
+                    if (!recipeMapByName.containsKey(key)) {
+                        List<String> ings = new ArrayList<>();
+                        if (m.getItems() != null) {
+                            for (PendingMealItem item : m.getItems()) {
+                                if (item.getFoodName() != null && !item.getFoodName().isBlank()) {
+                                    ings.add(item.getFoodName());
+                                } else if (item.getRawIngredientText() != null && !item.getRawIngredientText().isBlank()) {
+                                    ings.add(item.getRawIngredientText());
+                                }
+                            }
+                        }
+                        if (!ings.isEmpty()) {
+                            recipeMapByName.put(key, Map.of(
+                                    "id", m.getId() != null ? m.getId() : UUID.randomUUID().toString(),
+                                    "name", m.getRecipeName(),
+                                    "description", "Recipe from Mealie",
+                                    "source", "Mealie Recipe Action",
+                                    "slug", m.getRecipeId() != null ? m.getRecipeId() : m.getRecipeName(),
+                                    "ingredients", ings
+                            ));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not load recipes from local pending meals: {}", e.getMessage());
+            }
+        }
+
+        return new ArrayList<>(recipeMapByName.values());
+    }
+
+    private List<Map<String, Object>> fetchRecipesFromMealieApi(SettingsDto settings) {
+        String url = settings.mealieBaseUrl();
+        String token = settings.mealieApiToken();
+
+        if (url == null || url.isBlank() || token == null || token.isBlank()) {
+            return Collections.emptyList();
+        }
+
+        try {
+            String listUrl = url.replaceAll("/+$", "") + "/api/recipes?perPage=50";
+            log.info("Fetching recipe summaries from Mealie API: {}", listUrl);
+            String json = restClient.get()
+                    .uri(listUrl)
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode itemsNode = root.has("items") ? root.get("items") : root;
+
+            if (!itemsNode.isArray() || itemsNode.isEmpty()) {
+                log.info("No recipes returned from Mealie API list endpoint");
+                return Collections.emptyList();
+            }
+
+            long now = System.currentTimeMillis();
+            long ttlMs = 15 * 60 * 1000; // 15-minute TTL
+
+            List<JsonNode> summaries = new ArrayList<>();
+            itemsNode.forEach(summaries::add);
+
+            // Fetch details in parallel using CompletableFuture
+            List<CompletableFuture<Map<String, Object>>> futures = summaries.stream().map(r -> CompletableFuture.supplyAsync(() -> {
+                String id = r.hasNonNull("id") ? r.get("id").asText() : UUID.randomUUID().toString();
+                String name = r.hasNonNull("name") ? r.get("name").asText() : "Untitled Recipe";
+                String desc = r.hasNonNull("description") ? r.get("description").asText() : "";
+                String slug = r.hasNonNull("slug") ? r.get("slug").asText() : id;
+
+                // Check if summary already contains ingredients (if Mealie ever populates them)
+                List<String> ings = extractIngredientsFromRecipeNode(r);
+
+                if (ings.isEmpty()) {
+                    CachedMealieRecipe cached = recipeCache.get(slug);
+                    if (cached != null && (now - cached.timestamp() < ttlMs)) {
+                        return cached.recipeData();
+                    }
+
+                    // Fetch full recipe from Mealie: GET /api/recipes/{slug}
+                    try {
+                        String detailUrl = url.replaceAll("/+$", "") + "/api/recipes/" + slug;
+                        String detailJson = restClient.get()
+                                .uri(detailUrl)
+                                .header("Authorization", "Bearer " + token)
+                                .retrieve()
+                                .body(String.class);
+
+                        JsonNode detailRoot = objectMapper.readTree(detailJson);
+                        ings = extractIngredientsFromRecipeNode(detailRoot);
+
+                        if (detailRoot.hasNonNull("name") && !detailRoot.path("name").asText().isBlank()) {
+                            name = detailRoot.get("name").asText();
+                        }
+                        if (detailRoot.hasNonNull("description")) {
+                            desc = detailRoot.get("description").asText();
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not fetch recipe details for slug '{}' from Mealie: {}", slug, e.getMessage());
+                    }
+                }
+
+                Map<String, Object> recipeMap = Map.of(
+                        "id", id,
+                        "name", name,
+                        "description", desc,
+                        "source", "Mealie",
+                        "slug", slug,
+                        "ingredients", ings
+                );
+
+                if (!ings.isEmpty()) {
+                    recipeCache.put(slug, new CachedMealieRecipe(now, recipeMap));
+                }
+
+                return recipeMap;
+            })).toList();
+
+            List<Map<String, Object>> list = futures.stream()
+                    .map(CompletableFuture::join)
+                    .filter(rm -> {
+                        @SuppressWarnings("unchecked")
+                        List<String> ingList = (List<String>) rm.get("ingredients");
+                        return ingList != null && !ingList.isEmpty();
+                    })
+                    .collect(Collectors.toList());
+
+            log.info("Fetched {} complete recipes with ingredients from Mealie API", list.size());
+            return list;
+        } catch (Exception e) {
+            log.warn("Could not fetch recipes from Mealie API: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private List<String> extractIngredientsFromRecipeNode(JsonNode recipeNode) {
+        List<String> ings = new ArrayList<>();
+        JsonNode ingsNode = null;
+        if (recipeNode.has("recipe_ingredient") && recipeNode.get("recipe_ingredient").isArray()) {
+            ingsNode = recipeNode.get("recipe_ingredient");
+        } else if (recipeNode.has("recipeIngredient") && recipeNode.get("recipeIngredient").isArray()) {
+            ingsNode = recipeNode.get("recipeIngredient");
+        } else if (recipeNode.has("ingredients") && recipeNode.get("ingredients").isArray()) {
+            ingsNode = recipeNode.get("ingredients");
+        }
+
+        if (ingsNode != null) {
+            for (JsonNode ing : ingsNode) {
+                boolean isFood = true;
+                if (ing.has("is_food")) {
+                    isFood = ing.get("is_food").asBoolean(true);
+                } else if (ing.has("isFood")) {
+                    isFood = ing.get("isFood").asBoolean(true);
+                }
+                if (!isFood) {
+                    boolean hasFood = (ing.hasNonNull("food") && !ing.path("food").asText().isBlank())
+                            || (ing.hasNonNull("foodName") && !ing.path("foodName").asText().isBlank())
+                            || (ing.hasNonNull("food_name") && !ing.path("food_name").asText().isBlank());
+                    if (!hasFood) {
+                        continue; // skip section headers like "For the sauce"
+                    }
+                }
+
+                String foodName = null;
+                if (ing.path("food").isObject() && ing.path("food").hasNonNull("name") && !ing.path("food").path("name").asText().isBlank()) {
+                    foodName = ing.path("food").path("name").asText().trim();
+                } else if (ing.path("food").isTextual() && !ing.path("food").asText().isBlank()) {
+                    foodName = ing.path("food").asText().trim();
+                } else if (ing.hasNonNull("foodName") && !ing.path("foodName").asText().isBlank()) {
+                    foodName = ing.path("foodName").asText().trim();
+                } else if (ing.hasNonNull("food_name") && !ing.path("food_name").asText().isBlank()) {
+                    foodName = ing.path("food_name").asText().trim();
+                } else if (ing.hasNonNull("note") && !ing.path("note").asText().isBlank()) {
+                    foodName = ing.path("note").asText().trim();
+                } else if (ing.hasNonNull("title") && !ing.path("title").asText().isBlank()) {
+                    foodName = ing.path("title").asText().trim();
+                } else if (ing.hasNonNull("display") && !ing.path("display").asText().isBlank()) {
+                    foodName = ing.path("display").asText().trim();
+                } else if (ing.isTextual() && !ing.asText().isBlank()) {
+                    foodName = ing.asText().trim();
+                }
+
+                if (foodName != null && !foodName.isBlank()) {
+                    ings.add(foodName);
+                }
+            }
+        }
+        return ings;
     }
 
     private Map<String, Object> buildTailoredZeroWasteSuggestion(List<String> expiringIngredients) {

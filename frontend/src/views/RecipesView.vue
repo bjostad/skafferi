@@ -50,9 +50,9 @@
     </div>
 
     <!-- Mode Selector Tabs -->
-    <div v-if="hasMealieConfigured || hasLlmConfigured || pendingMeals.length > 0" class="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
+    <div v-if="hasMealieConfigured || hasLlmConfigured || pendingMeals.length > 0 || recipes.length > 0" class="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
       <button 
-        v-if="hasMealieConfigured"
+        v-if="hasMealieConfigured || recipes.length > 0 || pendingMeals.length > 0"
         @click="activeTab = 'matches'"
         class="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all"
         :class="activeTab === 'matches' ? 'bg-brand-500/20 text-brand-300 border border-brand-500/40 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'">
@@ -86,7 +86,7 @@
 
     <!-- Empty State: Neither Mealie nor LLM Configured -->
     <div 
-      v-if="!hasMealieConfigured && !hasLlmConfigured && pendingMeals.length === 0" 
+      v-if="!hasMealieConfigured && !hasLlmConfigured && pendingMeals.length === 0 && recipes.length === 0" 
       class="text-center py-16 bg-slate-900/60 border border-slate-800 rounded-3xl p-8 max-w-lg mx-auto space-y-4 shadow-lg my-6">
       <div class="w-16 h-16 rounded-3xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400 mx-auto">
         <ChefHat class="w-8 h-8" />
@@ -108,7 +108,7 @@
     <!-- ========================================================================= -->
     <!-- TAB 1: PANTRY RECIPE MATCHES                                              -->
     <!-- ========================================================================= -->
-    <div v-if="activeTab === 'matches' && hasMealieConfigured" class="space-y-4">
+    <div v-if="activeTab === 'matches'" class="space-y-4">
       
       <div v-if="recipes.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div 
@@ -516,14 +516,10 @@ async function loadSettings() {
   }
 }
 
-async function loadRecipes() {
-  if (!hasMealieConfigured.value) {
-    recipes.value = [];
-    return;
-  }
+async function loadRecipes(force = false) {
   isLoading.value = true;
   try {
-    const res = await api.getRecipeMatches();
+    const res = await api.getRecipeMatches(force ? { refresh: true } : {});
     recipes.value = res.data || [];
   } catch (err) {
     showToast('Failed to load matching recipes: ' + err.message, 'error');
@@ -558,8 +554,8 @@ async function loadPantryItems() {
 }
 
 function refreshCurrentTab() {
-  if (activeTab.value === 'matches' && hasMealieConfigured.value) {
-    loadRecipes();
+  if (activeTab.value === 'matches') {
+    loadRecipes(true);
   } else if (activeTab.value === 'pending') {
     loadPendingMeals();
   }
@@ -699,8 +695,6 @@ async function addMissingToShopping(items) {
 onMounted(async () => {
   await Promise.all([loadPendingMeals(), loadPantryItems()]);
   await loadSettings();
-  if (hasMealieConfigured.value) {
-    loadRecipes();
-  }
+  loadRecipes();
 });
 </script>

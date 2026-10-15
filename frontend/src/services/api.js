@@ -175,8 +175,8 @@ export default {
   },
 
   // Recipes & Meal Planning
-  getRecipeMatches() {
-    return api.get('/recipes/matches');
+  getRecipeMatches(params = {}) {
+    return api.get('/recipes/matches', { params });
   },
   generateZeroWasteMeal(itemIds = []) {
     return api.post('/recipes/ai-zero-waste', { itemIds });

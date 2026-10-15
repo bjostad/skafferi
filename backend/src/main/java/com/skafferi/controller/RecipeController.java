@@ -54,8 +54,9 @@ public class RecipeController {
     }
 
     @GetMapping("/matches")
-    public ResponseEntity<List<Map<String, Object>>> getMatchingRecipes() {
-        return ResponseEntity.ok(recipeService.getMatchingRecipes());
+    public ResponseEntity<List<Map<String, Object>>> getMatchingRecipes(
+            @RequestParam(value = "refresh", required = false, defaultValue = "false") boolean refresh) {
+        return ResponseEntity.ok(recipeService.getMatchingRecipes(refresh));
     }
 
     @PostMapping("/ai-zero-waste")
