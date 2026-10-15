@@ -12,12 +12,15 @@ import com.skafferi.repository.PendingCookedMealRepository;
 import com.skafferi.util.IngredientMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,7 +50,13 @@ public class RecipeService {
         this.bringSyncService = bringSyncService;
         this.itemRepository = itemRepository;
         this.pendingMealRepository = pendingMealRepository;
-        this.restClient = RestClient.builder().build();
+
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
+        this.restClient = RestClient.builder()
+                .requestFactory(requestFactory)
+                .build();
         this.objectMapper = new ObjectMapper();
     }
 
@@ -465,13 +474,16 @@ public class RecipeService {
             }
 
             long now = System.currentTimeMillis();
-            long ttlMs = 15 * 60 * 1000; // 15-minute TTL
+            long ttlMs = 60 * 60 * 1000L; // 60-minute TTL
 
             List<JsonNode> summaries = new ArrayList<>();
             itemsNode.forEach(summaries::add);
 
-            // Fetch details in parallel using CompletableFuture
-            List<CompletableFuture<Map<String, Object>>> futures = summaries.stream().map(r -> CompletableFuture.supplyAsync(() -> {
+            // Throttle parallel requests to Mealie to avoid overwhelming single-worker instances
+            Semaphore rateLimiter = new Semaphore(3);
+
+            // Fetch details with controlled concurrency and retry
+            List<CompletableFuture<Map<String, Object>>> futures = summaries.stream().map(r -> CompletableFuture.<Map<String, Object>>supplyAsync(() -> {
                 String id = r.hasNonNull("id") ? r.get("id").asText() : UUID.randomUUID().toString();
                 String name = r.hasNonNull("name") ? r.get("name").asText() : "Untitled Recipe";
                 String desc = r.hasNonNull("description") ? r.get("description").asText() : "";
@@ -488,18 +500,49 @@ public class RecipeService {
                         return cached.recipeData();
                     }
 
-                    // Fetch full recipe from Mealie: GET /api/recipes/{slug}
+                    try {
+                        rateLimiter.acquire();
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return cached != null ? cached.recipeData() : Collections.emptyMap();
+                    }
+
+                    JsonNode detailRoot = null;
+                    int maxAttempts = 3;
                     try {
                         String detailUrl = url.replaceAll("/+$", "") + "/api/recipes/" + slug;
-                        String detailJson = restClient.get()
-                                .uri(detailUrl)
-                                .header("Authorization", "Bearer " + token)
-                                .retrieve()
-                                .body(String.class);
+                        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                            try {
+                                String detailJson = restClient.get()
+                                        .uri(detailUrl)
+                                        .header("Authorization", "Bearer " + token)
+                                        .retrieve()
+                                        .body(String.class);
 
-                        JsonNode detailRoot = objectMapper.readTree(detailJson);
+                                if (detailJson != null && !detailJson.isBlank()) {
+                                    detailRoot = objectMapper.readTree(detailJson);
+                                    break;
+                                }
+                            } catch (Exception e) {
+                                if (attempt == maxAttempts) {
+                                    log.warn("Could not fetch recipe details for slug '{}' from Mealie after {} attempts: {}", slug, maxAttempts, e.getMessage());
+                                } else {
+                                    log.debug("Retry {}/{} for slug '{}' due to: {}", attempt, maxAttempts, slug, e.getMessage());
+                                    try {
+                                        Thread.sleep(150L * attempt);
+                                    } catch (InterruptedException ie) {
+                                        Thread.currentThread().interrupt();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        rateLimiter.release();
+                    }
+
+                    if (detailRoot != null) {
                         ings = extractIngredientsFromRecipeNode(detailRoot);
-
                         if (detailRoot.hasNonNull("name") && !detailRoot.path("name").asText().isBlank()) {
                             name = detailRoot.get("name").asText();
                         }
@@ -520,8 +563,9 @@ public class RecipeService {
                         } else if (detailRoot.hasNonNull("cook_time")) {
                             cookTime = detailRoot.get("cook_time").asText();
                         }
-                    } catch (Exception e) {
-                        log.warn("Could not fetch recipe details for slug '{}' from Mealie: {}", slug, e.getMessage());
+                    } else if (cached != null && cached.recipeData() != null) {
+                        log.info("Mealie failed for slug '{}'; falling back to existing cached recipe details", slug);
+                        return cached.recipeData();
                     }
                 }
 
