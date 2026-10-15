@@ -20,6 +20,7 @@ spring:
         format_sql: true
 
 skafferi:
+  app-name: ${APP_NAME:Skafferi}
   version: ${APP_VERSION:@project.version@}
   data-dir: ${DATA_DIR:./data}
   integrations:

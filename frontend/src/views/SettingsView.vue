@@ -34,6 +34,104 @@
     </div>
 
     <!-- ========================================================================= -->
+    <!-- SECTION 0: GENERAL & BRANDING (Collapsible)                               -->
+    <!-- ========================================================================= -->
+    <div id="section-general" class="bg-slate-850 bg-slate-900/90 border border-slate-700/80 rounded-3xl overflow-hidden shadow-lg transition-all duration-200">
+      
+      <!-- Collapsible Header -->
+      <div 
+        @click="toggleSection('general')"
+        class="p-5 flex items-center justify-between cursor-pointer select-none hover:bg-slate-800/40 transition-colors">
+        <div class="flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-2xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+            <Sliders class="w-5 h-5" />
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-lg text-white">General &amp; Branding</h3>
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                {{ currentAppName }}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">Customize your app name, header branding, and browser page titles.</p>
+          </div>
+        </div>
+
+        <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-transform">
+          <ChevronDown class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': openSections.general }" />
+        </div>
+      </div>
+
+      <!-- Collapsible Content -->
+      <div v-show="openSections.general" class="p-6 pt-0 border-t border-slate-800/80 mt-2 space-y-4 animate-in fade-in duration-150">
+        
+        <div class="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700/80 pb-3">
+            <div>
+              <h4 class="font-bold text-white text-sm">Application Name</h4>
+              <p class="text-xs text-slate-400 mt-0.5">Set a custom name for this application. It replaces &ldquo;Skafferi&rdquo; in the header navigation, browser page titles, and throughout the app.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div class="space-y-2">
+              <label class="text-xs font-semibold text-slate-300 block">App Name</label>
+              <div class="relative">
+                <input 
+                  v-model="settings.appName"
+                  type="text"
+                  placeholder="e.g. My Pantry, The Jostad Pantry (default: Skafferi)"
+                  maxlength="50"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition-colors shadow-inner pr-16" />
+                <button 
+                  v-if="settings.appName"
+                  @click="settings.appName = ''"
+                  type="button"
+                  title="Reset to default name (Skafferi)"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 transition-colors">
+                  Reset
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400">
+                Leave blank to use the default name (<span class="font-semibold text-slate-300">Skafferi</span>).
+              </p>
+            </div>
+
+            <!-- Live Preview Card -->
+            <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Live Preview</span>
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-[#68458c] border border-brand-400/30 flex items-center justify-center text-white text-xs font-bold shadow-md">
+                  {{ currentAppName.charAt(0).toUpperCase() }}
+                </div>
+                <div>
+                  <span class="font-extrabold text-base text-white tracking-tight">
+                    {{ currentAppName }}
+                  </span>
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+                Browser Title: <span class="text-brand-300 font-mono text-[11px]">Inventory | {{ currentAppName }}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section Save Button -->
+        <div class="flex justify-end pt-1">
+          <button 
+            @click="saveAllSettings" 
+            :disabled="isSaving"
+            class="px-5 py-2.5 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center gap-2">
+            <Save class="w-4 h-4" />
+            <span>{{ isSaving ? 'Saving...' : 'Save General Settings' }}</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
     <!-- SECTION 1: STORAGE LOCATIONS (Collapsible)                                -->
     <!-- ========================================================================= -->
     <div id="section-locations" class="bg-slate-850 bg-slate-900/90 border border-slate-700/80 rounded-3xl overflow-hidden shadow-lg transition-all duration-200">
@@ -589,7 +687,7 @@
               </div>
               <div>
                 <h4 class="font-bold text-white text-sm">Google Authentication</h4>
-                <p class="text-[11px] text-slate-400">Allow signing into Skafferi with Google accounts.</p>
+                <p class="text-[11px] text-slate-400">Allow signing into {{ currentAppName }} with Google accounts.</p>
               </div>
             </div>
 
@@ -740,7 +838,7 @@
                 {{ l.name }}
               </option>
             </select>
-            <p class="text-[11px] text-slate-400 mt-1">Select which shared list in your Bring! account Skafferi should sync pantry items to.</p>
+            <p class="text-[11px] text-slate-400 mt-1">Select which shared list in your Bring! account {{ currentAppName }} should sync pantry items to.</p>
           </div>
 
           <!-- Note for Google/Apple Sign-in users -->
@@ -760,26 +858,82 @@
 
         <!-- 2. Mealie -->
         <div class="bg-slate-800/80 rounded-2xl p-5 border border-slate-700/80 shadow-sm space-y-4">
-          <div class="flex items-center gap-2.5 border-b border-slate-700/80 pb-3">
-            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm border border-emerald-500/30">
-              M
+          <div class="flex items-center justify-between border-b border-slate-700/80 pb-3 flex-wrap gap-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm border border-emerald-500/30">
+                M
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-white text-sm">Mealie Recipe Actions &amp; Sync</h4>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Recipe Action Ready
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400">Trigger custom recipe actions in Mealie to send recipes and reconcile pantry deductions in {{ currentAppName }}.</p>
+              </div>
             </div>
-            <div>
-              <h4 class="font-bold text-white text-sm">Mealie Recipe Integration</h4>
-              <p class="text-[11px] text-slate-400">Automatically deduct ingredients when you cook meals in Mealie.</p>
+
+            <div class="flex items-center gap-2">
+              <router-link
+                to="/recipes"
+                class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+                <ChefHat class="w-3.5 h-3.5 text-amber-400" />
+                <span>Cooked Meals Queue</span>
+              </router-link>
+
+              <button 
+                type="button" 
+                @click="sendSampleRecipeAction"
+                :disabled="isSendingSample"
+                title="Send a sample Mealie recipe JSON to test the workflow"
+                class="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5">
+                <Sparkles class="w-3.5 h-3.5" :class="{ 'animate-spin': isSendingSample }" />
+                <span>{{ isSendingSample ? 'Sending...' : 'Simulate Recipe Action' }}</span>
+              </button>
             </div>
           </div>
 
-          <div class="p-3.5 bg-slate-950/70 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-2">
-            <p class="font-semibold text-white">How to connect Mealie:</p>
-            <ol class="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
-              <li>In Mealie, navigate to <strong>Settings > Webhooks</strong>.</li>
-              <li>Create a new Webhook on the <strong>Meal Cooked / Meal Plan</strong> event.</li>
-              <li>Set the Webhook Target URL to:</li>
-            </ol>
-            <div class="bg-slate-900 px-3 py-1.5 rounded-lg font-mono text-brand-400 border border-slate-800 select-all">
-              {{ currentOrigin }}/api/webhooks/mealie
+          <!-- Step-by-Step Recipe Action Setup Guide -->
+          <div class="p-4 bg-slate-950/70 rounded-2xl border border-slate-800 text-xs text-slate-300 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-white text-xs flex items-center gap-1.5">
+                <span>Configure Mealie Custom Recipe Action</span>
+              </span>
+              <span class="text-[11px] text-slate-400">Settings &gt; Data Management &gt; Custom Recipe Actions</span>
             </div>
+
+            <ol class="list-decimal list-inside space-y-1.5 text-slate-300 text-xs leading-relaxed">
+              <li>In Mealie, open <strong>Settings &gt; Data Management &gt; Custom Recipe Actions</strong> (or Household &gt; Recipe Actions).</li>
+              <li>Click <strong>Create Action</strong> (or <strong>+</strong>).</li>
+              <li>Set <strong>Action Type</strong> to <span class="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-[11px] font-bold">POST</span> (sends recipe JSON).</li>
+              <li>Set <strong>Action Title</strong> to <span class="font-semibold text-white">Cook with {{ currentAppName }}</span> (or <em>Send to {{ currentAppName }}</em>).</li>
+              <li>Set the <strong>Action URL</strong> to the endpoint below:</li>
+            </ol>
+
+            <div class="flex items-center gap-2">
+              <div class="flex-1 bg-slate-900 px-3.5 py-2 rounded-xl font-mono text-brand-300 border border-slate-800 text-xs select-all truncate">
+                {{ currentOrigin }}/api/recipes/action
+              </div>
+              <button 
+                type="button"
+                @click="copyRecipeActionUrl"
+                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0">
+                <Check v-if="hasCopiedActionUrl" class="w-3.5 h-3.5 text-emerald-400" />
+                <Copy v-else class="w-3.5 h-3.5" />
+                <span>{{ hasCopiedActionUrl ? 'Copied!' : 'Copy URL' }}</span>
+              </button>
+            </div>
+
+            <p class="text-[11px] text-slate-400 pt-1 border-t border-slate-800/80 leading-normal">
+              When triggered from a recipe page in Mealie, the full recipe JSON is sent to {{ currentAppName }} and queued under <strong>Recipes &gt; Cooked Meals Queue</strong> for you to review matches, adjust quantities, and commit FIFO stock deductions.
+            </p>
+          </div>
+
+          <!-- Optional direct API connection -->
+          <div class="space-y-1 pt-1">
+            <span class="text-xs font-semibold text-slate-300 block">Mealie Instance Connection (Optional)</span>
+            <p class="text-[11px] text-slate-400">Configure these credentials if you also want {{ currentAppName }} to browse and suggest recipes based on your current pantry inventory.</p>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -829,7 +983,7 @@
                   class="mt-0.5 text-brand-500 focus:ring-brand-500" />
                 <div>
                   <span class="text-xs font-bold block text-white">Immediate Auto-Deduct</span>
-                  <span class="text-[11px] text-slate-400 block mt-0.5">Automatically deduct pantry items via FIFO in the background as soon as Mealie triggers a webhook.</span>
+                  <span class="text-[11px] text-slate-400 block mt-0.5">Automatically deduct pantry items via FIFO in the background as soon as Mealie triggers a recipe action.</span>
                 </div>
               </label>
             </div>
@@ -1178,7 +1332,7 @@
     <!-- Settings Page Footer -->
     <div class="pt-6 pb-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
       <div class="flex items-center gap-2">
-        <span class="font-semibold text-slate-300">Skafferi</span>
+        <span class="font-semibold text-slate-300">{{ currentAppName }}</span>
         <span>&bull;</span>
         <span>Self-hosted Pantry &amp; Inventory Management</span>
       </div>
@@ -1362,7 +1516,7 @@
         <!-- Body -->
         <div class="p-5 space-y-4 text-xs text-slate-300">
           <p class="leading-relaxed">
-            Bring! does not provide an external OAuth authorization screen for third-party apps like Skafferi. To sync your shopping list, your Bring! account simply needs a dedicated password:
+            Bring! does not provide an external OAuth authorization screen for third-party apps like {{ currentAppName }}. To sync your shopping list, your Bring! account simply needs a dedicated password:
           </p>
 
           <div class="space-y-2.5">
@@ -1388,7 +1542,7 @@
               <div class="space-y-0.5">
                 <h5 class="font-bold text-white text-xs">Enter credentials here</h5>
                 <p class="text-[11px] text-slate-400 leading-normal">
-                  In Skafferi Settings, enter your Google account email (<span class="font-mono text-slate-300">you@gmail.com</span>) and the Bring! password you just created.
+                  In {{ currentAppName }} Settings, enter your Google account email (<span class="font-mono text-slate-300">you@gmail.com</span>) and the Bring! password you just created.
                 </p>
               </div>
             </div>
@@ -1435,7 +1589,8 @@ import {
   MapPin, Users, Link2, ShieldCheck, Plus, Edit2, Trash2, UserPlus, Save, X, Info, ExternalLink,
   ChevronDown, ChevronsUpDown, Bell, Clock, Sparkles, FolderTree, Mail, Send,
   Refrigerator, Snowflake, Flame, Archive, LayoutGrid, Box, Home, Warehouse,
-  Apple, Milk, Beef, Croissant, Package, Wheat, CupSoda, Cookie, IceCream
+  Apple, Milk, Beef, Croissant, Package, Wheat, CupSoda, Cookie, IceCream,
+  Sliders, Copy, Check, ChefHat
 } from 'lucide-vue-next';
 import api from '../services/api';
 import { useToast } from '../composables/useToast';
@@ -1450,6 +1605,7 @@ const bringLists = ref([]);
 
 // Collapsible state for each section
 const openSections = reactive({
+  general: true,
   locations: true,
   notifications: true,
   categories: true,
@@ -1465,6 +1621,7 @@ const areAllOpen = computed(() => {
 
 function toggleAllSections() {
   const target = !areAllOpen.value;
+  openSections.general = target;
   openSections.locations = target;
   openSections.notifications = target;
   openSections.categories = target;
@@ -1489,6 +1646,7 @@ function jumpToSection(secId) {
 }
 
 const sections = [
+  { id: 'general', title: 'General & Branding', icon: Sliders },
   { id: 'locations', title: 'Storage Locations', icon: MapPin },
   { id: 'notifications', title: 'Freshness & Expiry', icon: Bell },
   { id: 'categories', title: 'Categories & Shelf-Life', icon: FolderTree },
@@ -1516,6 +1674,7 @@ const isSendingDigest = ref(false);
 const isTestingLlm = ref(false);
 
 const settings = reactive({
+  appName: '',
   bringEmail: '',
   bringPassword: '',
   bringListUuid: '',
@@ -1553,6 +1712,10 @@ const settings = reactive({
   llmBaseUrl: '',
   hasLlmApiKey: false,
   hasMealieConnection: false,
+});
+
+const currentAppName = computed(() => {
+  return (settings.appName && settings.appName.trim()) ? settings.appName.trim() : 'Skafferi';
 });
 
 const defaultModelPlaceholder = computed(() => {
@@ -1645,6 +1808,65 @@ async function triggerManualDigest(type) {
   }
 }
 
+const isSendingSample = ref(false);
+const hasCopiedActionUrl = ref(false);
+
+function copyRecipeActionUrl() {
+  const url = `${currentOrigin.value}/api/recipes/action`;
+  navigator.clipboard.writeText(url);
+  hasCopiedActionUrl.value = true;
+  showToast('Recipe Action URL copied to clipboard!');
+  setTimeout(() => {
+    hasCopiedActionUrl.value = false;
+  }, 2500);
+}
+
+async function sendSampleRecipeAction() {
+  isSendingSample.value = true;
+  try {
+    const sampleRecipe = {
+      id: 'sample-' + Date.now(),
+      name: 'Creamy Tuscan Garlic Chicken',
+      slug: 'creamy-tuscan-garlic-chicken',
+      recipeYield: '4 servings',
+      recipeIngredient: [
+        {
+          food: { name: 'Chicken Breast' },
+          unit: { name: 'lbs' },
+          quantity: 1.5,
+          display: '1.5 lbs Chicken Breast, boneless'
+        },
+        {
+          food: { name: 'Heavy Cream' },
+          unit: { name: 'cup' },
+          quantity: 1.0,
+          display: '1 cup Heavy Cream'
+        },
+        {
+          food: { name: 'Garlic' },
+          unit: { name: 'cloves' },
+          quantity: 3.0,
+          display: '3 cloves Garlic, minced'
+        },
+        {
+          food: { name: 'Baby Spinach' },
+          unit: { name: 'cups' },
+          quantity: 2.0,
+          display: '2 cups Baby Spinach'
+        }
+      ]
+    };
+
+    await api.triggerRecipeAction(sampleRecipe);
+    showToast(`Sample recipe "${sampleRecipe.name}" queued! Check Recipes > Cooked Meals Queue.`);
+    window.dispatchEvent(new CustomEvent('pending-meals-changed'));
+  } catch (err) {
+    showToast('Failed to send sample recipe: ' + (err.response?.data?.message || err.message), 'error');
+  } finally {
+    isSendingSample.value = false;
+  }
+}
+
 // Location Modal
 const locationModalOpen = ref(false);
 const locationForm = reactive({
@@ -1696,6 +1918,10 @@ async function loadSettings() {
   try {
     const res = await api.getSettings();
     Object.assign(settings, res.data);
+    if (res.data.appName !== undefined) {
+      settings.appName = res.data.appName || '';
+      appInfo.setAppName(res.data.appName);
+    }
     if (['gpt-4o-mini', 'gemini-1.5-flash', 'gemini-2.5-flash', 'google/gemini-2.5-flash', 'llama3.2:latest'].includes(settings.llmModel)) {
       settings.llmModel = '';
     }
@@ -1856,6 +2082,9 @@ async function saveAllSettings() {
   try {
     const res = await api.saveSettings(settings);
     Object.assign(settings, res.data);
+    if (res.data.appName !== undefined) {
+      appInfo.setAppName(res.data.appName);
+    }
     window.dispatchEvent(new CustomEvent('settings-updated'));
     showToast('Settings saved successfully!');
   } catch (err) {

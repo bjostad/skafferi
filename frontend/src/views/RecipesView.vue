@@ -37,7 +37,7 @@
             {{ pendingMeals.length }} Cooked Meal{{ pendingMeals.length > 1 ? 's' : '' }} Pending Review
           </p>
           <p class="text-[11px] text-amber-200/80">
-            Mealie recipes were cooked. Review matched ingredients and deduction quantities before stock is adjusted.
+            Mealie recipes were cooked or triggered via Recipe Action. Review matched ingredients and deduction quantities before stock is adjusted.
           </p>
         </div>
       </div>
@@ -94,14 +94,14 @@
       <div>
         <h3 class="text-lg font-bold text-white">Recipe Features Not Configured</h3>
         <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-          Connect your Mealie recipe instance to match recipes with in-stock pantry items, or add an LLM API key to generate creative zero-waste meals from expiring ingredients.
+          Configure a Mealie Recipe Action to POST cooked meals directly to Skafferi for review, connect your Mealie instance to match in-stock pantry items, or add an LLM API key for the AI Zero-Waste Chef.
         </p>
       </div>
       <router-link 
         to="/settings?section=integrations" 
         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-300 hover:bg-brand-200 text-slate-950 font-bold text-xs shadow-md transition-all">
         <Settings class="w-4 h-4" />
-        <span>Configure in Settings</span>
+        <span>Configure Mealie Recipe Action</span>
       </router-link>
     </div>
 
@@ -246,8 +246,16 @@
         <CheckCircle2 class="w-12 h-12 text-emerald-500/80 mx-auto" />
         <h4 class="text-base font-bold text-white">All Cooked Meals Reconciled!</h4>
         <p class="text-xs text-slate-400 max-w-md mx-auto">
-          No pending meals in queue. When Mealie triggers a &ldquo;Meal Cooked&rdquo; webhook, ingredients will automatically appear here for review before inventory is deducted.
+          No pending meals in queue. When you trigger your &ldquo;Cook with Skafferi&rdquo; Recipe Action in Mealie, ingredients will automatically appear here for review before inventory is deducted.
         </p>
+        <div class="pt-2">
+          <router-link 
+            to="/settings?section=integrations" 
+            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold transition-colors">
+            <Settings class="w-3.5 h-3.5 text-brand-300" />
+            <span>Configure Mealie Recipe Action</span>
+          </router-link>
+        </div>
       </div>
 
       <!-- Meal Cards List -->

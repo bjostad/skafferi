@@ -184,6 +184,9 @@ export default {
   addMissingToShoppingList(items = []) {
     return api.post('/recipes/missing-to-shopping', { items });
   },
+  triggerRecipeAction(recipeJson) {
+    return api.post('/recipes/action', recipeJson);
+  },
 
   // Pending Cooked Meals & Reconciliation
   getPendingMeals() {

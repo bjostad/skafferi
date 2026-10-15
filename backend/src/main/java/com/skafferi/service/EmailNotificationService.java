@@ -106,6 +106,7 @@ public class EmailNotificationService {
 
     public void sendTestEmail() {
         SettingsDto raw = settingsService.getRawSettings();
+        String appName = settingsService.getAppName();
         String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("MMM d, yyyy"));
         String html = """
                 <!DOCTYPE html>
@@ -113,7 +114,7 @@ public class EmailNotificationService {
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px; margin: 0;">
                   <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border: 1px solid #334155; border-radius: 16px; overflow: hidden; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                     <div style="margin-bottom: 20px;">
-                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">Skafferi</span>
+                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">%s</span>
                       <span style="margin-left: 8px; background: #064e3b; color: #34d399; font-size: 11px; padding: 3px 8px; border-radius: 9999px; font-weight: 700;">TEST SUCCESSFUL</span>
                     </div>
                     <p style="font-size: 15px; color: #e2e8f0; line-height: 1.5; margin: 0 0 12px 0;">
@@ -132,6 +133,7 @@ public class EmailNotificationService {
                 </body>
                 </html>
                 """.formatted(
+                appName,
                 raw.smtpHost(),
                 raw.smtpHost(),
                 raw.smtpPort() != null ? raw.smtpPort() : 587,
@@ -140,7 +142,7 @@ public class EmailNotificationService {
                 dateStr
         );
 
-        sendEmail("Skafferi - SMTP Test Connection Successful", html);
+        sendEmail(appName + " - SMTP Test Connection Successful", html);
     }
 
     public void sendDailyExpirationDigest() {
@@ -219,13 +221,14 @@ public class EmailNotificationService {
             itemsHtml.append("</div></div>");
         }
 
+        String appName = settingsService.getAppName();
         String html = """
                 <!DOCTYPE html>
                 <html>
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px; margin: 0;">
                   <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border: 1px solid #334155; border-radius: 16px; overflow: hidden; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                     <div style="margin-bottom: 16px;">
-                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">Skafferi</span>
+                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">%s</span>
                       <span style="margin-left: 8px; background: #3b82f6; color: #eff6ff; font-size: 11px; padding: 3px 8px; border-radius: 9999px; font-weight: 700;">DAILY DIGEST</span>
                     </div>
                     <p style="font-size: 14px; color: #94a3b8; margin: 0 0 20px 0;">
@@ -238,9 +241,9 @@ public class EmailNotificationService {
                   </div>
                 </body>
                 </html>
-                """.formatted(dateStr, totalActionable, itemsHtml.toString());
+                """.formatted(appName, dateStr, totalActionable, itemsHtml.toString());
 
-        sendEmail("Skafferi Daily Expiration Digest: " + totalActionable + " items need attention", html);
+        sendEmail(appName + " Daily Expiration Digest: " + totalActionable + " items need attention", html);
     }
 
     public void sendWeeklyGroceryDigest() {
@@ -268,13 +271,14 @@ public class EmailNotificationService {
         }
         itemsHtml.append("</div>");
 
+        String appName = settingsService.getAppName();
         String html = """
                 <!DOCTYPE html>
                 <html>
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px; margin: 0;">
                   <div style="max-width: 600px; margin: 0 auto; background-color: #1e293b; border: 1px solid #334155; border-radius: 16px; overflow: hidden; padding: 28px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                     <div style="margin-bottom: 16px;">
-                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">Skafferi</span>
+                      <span style="color: #6ee7b7; font-size: 22px; font-weight: 800;">%s</span>
                       <span style="margin-left: 8px; background: #8b5cf6; color: #f5f3ff; font-size: 11px; padding: 3px 8px; border-radius: 9999px; font-weight: 700;">WEEKLY GROCERY PREP</span>
                     </div>
                     <p style="font-size: 14px; color: #94a3b8; margin: 0 0 20px 0;">
@@ -287,9 +291,9 @@ public class EmailNotificationService {
                   </div>
                 </body>
                 </html>
-                """.formatted(dateStr, lowStock.size(), itemsHtml.toString());
+                """.formatted(appName, dateStr, lowStock.size(), itemsHtml.toString());
 
-        sendEmail("Skafferi Weekly Grocery Run: " + lowStock.size() + " items to restock", html);
+        sendEmail(appName + " Weekly Grocery Run: " + lowStock.size() + " items to restock", html);
     }
 
     // Daily at 08:00 AM

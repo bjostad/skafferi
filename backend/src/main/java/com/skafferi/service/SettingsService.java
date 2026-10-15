@@ -74,6 +74,9 @@ public class SettingsService {
     @Value("${skafferi.version:0.6.1-beta}")
     private String configuredVersion;
 
+    @Value("${skafferi.app-name:Skafferi}")
+    private String defaultAppName;
+
     private final org.springframework.boot.info.BuildProperties buildProperties;
 
     public SettingsService(BringSyncService bringSyncService,
@@ -87,6 +90,14 @@ public class SettingsService {
             return buildProperties.getVersion();
         }
         return configuredVersion != null && !configuredVersion.isBlank() ? configuredVersion : "0.5.0-beta";
+    }
+
+    public String getAppName() {
+        SettingsDto raw = getRawSettings();
+        if (raw.appName() != null && !raw.appName().isBlank()) {
+            return raw.appName().trim();
+        }
+        return (defaultAppName != null && !defaultAppName.isBlank()) ? defaultAppName.trim() : "Skafferi";
     }
 
     @PostConstruct
@@ -125,6 +136,7 @@ public class SettingsService {
             }
         }
         return new SettingsDto(
+                defaultAppName != null && !defaultAppName.isBlank() ? defaultAppName : "Skafferi",
                 defaultBringEmail,
                 defaultBringPassword,
                 "",
@@ -173,6 +185,7 @@ public class SettingsService {
         boolean hasLlm = (raw.llmApiKey() != null && !raw.llmApiKey().isBlank());
 
         return new SettingsDto(
+                raw.appName() != null ? raw.appName() : "",
                 raw.bringEmail(),
                 raw.bringPassword() != null && !raw.bringPassword().isBlank() ? "********" : "",
                 raw.bringListUuid(),
@@ -240,8 +253,10 @@ public class SettingsService {
         boolean hasMealie = (dto.mealieBaseUrl() != null && !dto.mealieBaseUrl().isBlank() &&
                              mealieToken != null && !mealieToken.isBlank());
         boolean hasLlm = (llmKey != null && !llmKey.isBlank());
+        String appName = dto.appName() != null ? dto.appName().trim() : "";
 
         SettingsDto updated = new SettingsDto(
+                appName,
                 dto.bringEmail(),
                 bringPass,
                 dto.bringListUuid(),

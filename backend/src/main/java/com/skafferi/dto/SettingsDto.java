@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SettingsDto(
+        // App Customization
+        String appName,
+
         // Bring!
         String bringEmail,
         String bringPassword,

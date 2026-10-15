@@ -1,7 +1,8 @@
 package com.skafferi.controller;
 
-import com.skafferi.dto.MealieWebhookPayload;
-import com.skafferi.service.MealieWebhookService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.skafferi.domain.PendingCookedMeal;
+import com.skafferi.service.PendingMealService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,15 +12,20 @@ import java.util.Map;
 @RequestMapping("/api/webhooks/mealie")
 public class MealieWebhookController {
 
-    private final MealieWebhookService mealieWebhookService;
+    private final PendingMealService pendingMealService;
 
-    public MealieWebhookController(MealieWebhookService mealieWebhookService) {
-        this.mealieWebhookService = mealieWebhookService;
+    public MealieWebhookController(PendingMealService pendingMealService) {
+        this.pendingMealService = pendingMealService;
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, String>> handleWebhook(@RequestBody MealieWebhookPayload payload) {
-        mealieWebhookService.processMealCooked(payload);
-        return ResponseEntity.ok(Map.of("status", "processed", "recipe", payload.recipeName() != null ? payload.recipeName() : "unknown"));
+    public ResponseEntity<Map<String, Object>> handleWebhook(@RequestBody JsonNode payload) {
+        PendingCookedMeal meal = pendingMealService.queueMealFromRecipeJson(payload);
+        return ResponseEntity.ok(Map.of(
+                "status", "processed",
+                "recipe", meal.getRecipeName() != null ? meal.getRecipeName() : "unknown",
+                "mealId", meal.getId(),
+                "ingredientsCount", meal.getItems() != null ? meal.getItems().size() : 0
+        ));
     }
 }

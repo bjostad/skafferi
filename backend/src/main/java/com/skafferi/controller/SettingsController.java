@@ -70,6 +70,9 @@ public class SettingsController {
 
     @GetMapping("/version")
     public ResponseEntity<Map<String, String>> getVersion() {
-        return ResponseEntity.ok(Map.of("version", settingsService.getAppVersion()));
+        return ResponseEntity.ok(Map.of(
+                "version", settingsService.getAppVersion(),
+                "appName", settingsService.getAppName()
+        ));
     }
 }

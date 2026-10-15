@@ -303,7 +303,7 @@ public class RecipeService {
         Map<String, Object> payload = Map.of(
                 "model", m,
                 "messages", List.of(
-                        Map.of("role", "user", "content", "Reply with: Hello from Skafferi Zero-Waste Chef!")
+                        Map.of("role", "user", "content", "Reply with: Hello from " + settingsService.getAppName() + " Zero-Waste Chef!")
                 ),
                 "max_tokens", 30
         );

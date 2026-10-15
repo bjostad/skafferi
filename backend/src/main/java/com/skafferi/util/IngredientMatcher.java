@@ -123,7 +123,10 @@ public class IngredientMatcher {
             if (it.length() < 3) continue;
             for (String st : stockTokens) {
                 if (st.length() < 3) continue;
-                if (it.equals(st)) return true;
+                // Shared root prefix >= 4 characters (e.g. parmigiano & parmesan)
+                if (commonPrefixLength(it, st) >= 4) {
+                    return true;
+                }
 
                 // Levenshtein similarity on tokens >= 4 characters
                 if (it.length() >= 4 && st.length() >= 4) {
@@ -136,6 +139,15 @@ public class IngredientMatcher {
         }
 
         return false;
+    }
+
+    private static int commonPrefixLength(String s1, String s2) {
+        int len = Math.min(s1.length(), s2.length());
+        int i = 0;
+        while (i < len && s1.charAt(i) == s2.charAt(i)) {
+            i++;
+        }
+        return i;
     }
 
     public static String normalize(String s) {

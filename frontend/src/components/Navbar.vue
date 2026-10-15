@@ -36,7 +36,7 @@
         </div>
         <div>
           <span class="font-extrabold text-xl tracking-tight text-white">
-            Skafferi
+            {{ appName }}
           </span>
         </div>
       </router-link>
@@ -316,6 +316,14 @@
               <div class="border-t border-slate-800 my-1"></div>
 
               <router-link 
+                to="/settings?section=general" 
+                @click="userMenuOpen = false"
+                class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
+                <Sliders class="w-4 h-4 text-brand-400" />
+                General &amp; Branding
+              </router-link>
+
+              <router-link 
                 to="/settings?section=locations" 
                 @click="userMenuOpen = false"
                 class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors">
@@ -360,7 +368,7 @@
 
             <!-- Settings Menu Footer -->
             <div class="px-3.5 py-2.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-              <span class="font-medium text-slate-400">Skafferi</span>
+              <span class="font-medium text-slate-400">{{ appName }}</span>
               <span v-if="appVersionDisplay" class="font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60 text-[10px]">{{ appVersionDisplay }}</span>
             </div>
 
@@ -414,7 +422,7 @@ import { useRouter } from 'vue-router';
 import { 
   Package, Boxes, Clock, ShoppingCart, Settings, ScanBarcode, Receipt, Plus, 
   ChevronDown, MapPin, Link2, Users, Check, ShieldCheck,
-  Bell, AlertTriangle, Sparkles, CheckCircle2, ChefHat, BarChart3 
+  Bell, AlertTriangle, Sparkles, CheckCircle2, ChefHat, BarChart3, Sliders 
 } from 'lucide-vue-next';
 import { auth } from '../services/auth';
 import api from '../services/api';
@@ -436,9 +444,10 @@ const hasMealieConfigured = ref(false);
 const hasLlmConfigured = ref(false);
 
 const isRecipesMenuVisible = computed(() => {
-  return hasMealieConfigured.value || hasLlmConfigured.value;
+  return hasMealieConfigured.value || hasLlmConfigured.value || pendingMealCount.value > 0;
 });
 
+const appName = computed(() => appInfo.getAppName());
 const currentUser = computed(() => auth.getCurrentUser());
 const allUsers = computed(() => auth.state.allUsers);
 const providers = computed(() => auth.state.providers || {});
@@ -466,6 +475,9 @@ async function loadIntegrationSettings() {
   try {
     const res = await api.getSettings();
     const data = res.data || {};
+    if (data.appName !== undefined) {
+      appInfo.setAppName(data.appName);
+    }
     hasMealieConfigured.value = !!(data.hasMealieConnection || (data.mealieBaseUrl && data.mealieApiToken));
     hasLlmConfigured.value = !!(data.hasLlmApiKey || (data.llmApiKey && data.llmApiKey.length > 0));
   } catch (err) {
